@@ -4,6 +4,8 @@ from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
 import re
+import datetime
+
 
 # Set page config at the very beginning
 st.set_page_config(
@@ -14,9 +16,9 @@ st.set_page_config(
 )
 
 # Display the PNG image in the top left corner of the Streamlit sidebar with custom dimensions
-image_path = ''
+image_path = "https://raw.githubusercontent.com/VigyanShaala-Tech/student_registration_ui/final_registration_ui/image/vslogo.png"
 st.markdown(
-    f'<div style="text-align:center"><img src="{image_path}" width="150"></div>',
+    f'<div style="text-align:center"><img src="{image_path}" width="200"></div>',
     unsafe_allow_html=True
 )
 
@@ -60,10 +62,10 @@ def get_db_connection():
 
       
 # Cache database queries
-@st.cache_data(ttl=3600)
-def fetch_data(_engine, query, column_name=None):
+@st.cache_data
+def fetch_data(_engine, query, column_name=None, params=None):
     try:
-        df = pd.read_sql(query, _engine)
+        df = pd.read_sql(query, _engine, params=params)
         if column_name:
             return df[column_name].tolist()
         return df
@@ -72,33 +74,41 @@ def fetch_data(_engine, query, column_name=None):
         return []
 
 # Cache location data
-@st.cache_data(ttl=3600)
+@st.cache_data
 def fetch_location_data(_engine, state=None, district=None, is_hometown=False):
     try:
         if state and district:
-            query = f'''SELECT DISTINCT "City Category" 
-                       FROM staging."location_mapping" 
-                       WHERE "State/Union Territory" = '{state}'
-                       AND "District " = '{district}'
-                       ORDER BY "City Category"'''
+            query = f'''SELECT DISTINCT "city_category" 
+                       FROM vg_prod."location_mapping" 
+                       WHERE "state_union_territory" = '{state}'
+                       AND "district" = '{district}'
+                       ORDER BY "city_category"'''
         elif state:
-            query = f'''SELECT DISTINCT "District " 
-                       FROM staging."location_mapping" 
-                       WHERE "State/Union Territory" = '{state}'
-                       ORDER BY "District "'''
+            query = f'''SELECT DISTINCT "district"     
+                       FROM vg_prod."location_mapping" 
+                       WHERE "state_union_territory" = '{state}'
+                       ORDER BY "district"'''
         else:
-            query = f'''SELECT DISTINCT "State/Union Territory" 
-                       FROM staging."location_mapping" 
-                       WHERE "Country" = 'India' 
-                       ORDER BY "State/Union Territory"'''
+            query = f'''SELECT DISTINCT "state_union_territory" 
+                       FROM vg_prod."location_mapping" 
+                       WHERE "country" = 'India' 
+                       ORDER BY "state_union_territory"'''
         
-        return fetch_data(_engine, query, "City Category" if state and district else "District " if state else "State/Union Territory")
+        return fetch_data(_engine, query, "city_category" if state and district else "district" if state else "state_union_territory")
     except Exception as e:
         st.error(f"Error fetching location data: {str(e)}")
         return []
 
-# Cache subject data
 
+def validate_character_count(text, min_chars=50, max_chars=1_000_000):
+    char_count = len(text.strip())
+    
+    if char_count < min_chars:
+        return False, f"Minimum {min_chars} characters required. Currently: {char_count}"
+    if char_count > max_chars:
+        return False, f"Maximum {max_chars} characters exceeded. Currently: {char_count}"
+    
+    return True, "Valid input"
 
 # Email validation and suggestion functions
 def get_email_suggestion(email):
@@ -119,12 +129,10 @@ def get_email_suggestion(email):
     return None
 
 def validate_email(email):
-    # Basic email regex pattern
     pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
     if not re.match(pattern, email):
         return False, "Invalid email format"
 
-    # Known domain corrections
     common_typos = {
         "gamil.com": "gmail.com",
         "gnail.com": "gmail.com",
@@ -133,23 +141,18 @@ def validate_email(email):
         "outlok.com": "outlook.com"
     }
 
-    # Split email into user and domain parts
     try:
         user, domain = email.split("@")
     except ValueError:
         return False, "Invalid email format"
 
-    # Check for common domain typos
     if domain.lower() in common_typos:
         suggestion = f"{user}@{common_typos[domain.lower()]}"
         return False, f"Did you mean {suggestion}?"
 
-    # Validate TLD
     valid_tlds = ('.com', '.org', '.net', '.edu', '.gov', '.io', '.in')
     if not domain.endswith(valid_tlds):
         return False, "Invalid email domain"
-
- 
 
     try:
         engine = get_db_connection()
@@ -157,16 +160,16 @@ def validate_email(email):
             return False, "Could not connect to the database"
 
         with engine.connect() as conn:
-            query = text('SELECT "email" FROM raw.general_information_sheet_t WHERE LOWER("email") = LOWER(:email)')
-            result = conn.execute(query, {"email": email})
+            query = text('SELECT "Email" FROM vg_prod.general_information_sheet WHERE LOWER("Email") = LOWER(:Email)')
+            result = conn.execute(query, {"Email": email})
             row = result.fetchone()
 
             if row:
-                return False, "Your mail id is registered already"
+                return False, "already_registered"
     except Exception as e:
         return False, f"Database error while checking email: {str(e)}"
 
-    return True, "Valid email"
+    return True, ""
 
 def validate_phone(phone):
     if not phone:
@@ -205,24 +208,26 @@ def show_thank_you_page():
     st.balloons()
 
     st.markdown(
-        """
+         """
         <div style="display: flex; justify-content: center;">
             <div style="max-width: 700px; text-align: center;">
-                <h2>🎉 Thank You for Registering!</h2>
+                <h2>🎉 Welcome to She-for-STEM!</h2>
                 <p style="font-size: 18px;">
-                    You have been successfully registered to the <strong>She for STEM Program</strong>.
+                    Thanks for registering — you'll be enrolled soon.
                 </p>
-                <h3>🙌 Stay Connected with Us!</h3>
+                <h3>👉 Start Learning:</h3>
                 <p style="font-size: 17px;">
-                    Please follow <strong>VigyanShaala</strong> on our social media platforms to stay updated:
+                    📱 <a href="https://play.google.com/store/apps/details?id=com.vigyanshaala.courses" target="_blank">Download App (Mobile)</a><br>
+                    💻 <a href="https://mytribe.vigyanshaala.com/" target="_blank">Access on Computer</a><br>
+                    🎥 <a href="https://bit.ly/VigyanShaala_App_Playlist" target="_blank">How to log in</a>
                 </p>
-                <p style="font-size: 16px;">
-                    🔗 <a href="https://www.instagram.com/vigyanshaala/" target="_blank">Instagram</a><br>
-                    🔗 <a href="https://x.com/vigyanshaala" target="_blank">Twitter</a><br>
-                    🔗 <a href="https://www.linkedin.com/company/vigyanshaala//" target="_blank">LinkedIn</a><br>
-                    🔗 <a href="https://www.youtube.com/@VigyanShaalaInternational" target="_blank">YouTube</a>
-                    🔗 <a href="https://www.facebook.com/VigyanShaala?_rdr" target="_blank">Facebook</a>
-                    🔗 <a href="https://vigyanshaala.com/" target="_blank">Website</a>
+                <h3>📢 WhatsApp Group Updates:</h3>
+                <p style="font-size: 17px;">
+                    You will be added to the WhatsApp group shortly. Stay tuned!
+                </p>
+                <p style="font-size: 18px;">
+                    Excited to have you onboard!<br>
+                    – Team VigyanShaala
                 </p>
             </div>
         </div>
@@ -256,6 +261,8 @@ def main():
         st.session_state.selected_university = None
     if 'selected_college' not in st.session_state:
         st.session_state.selected_college = None
+    if 'new_college_name' not in st.session_state:
+        st.session_state.new_college_name = None
     if 'college_state' not in st.session_state:
         st.session_state.college_state = None
     if 'college_district' not in st.session_state:
@@ -266,6 +273,8 @@ def main():
         st.session_state.selected_subjects = []
     if 'whatsapp' not in st.session_state:
         st.session_state.whatsapp = ""
+    if 'dob' not in st.session_state:
+        st.session_state.dob = ""
     if 'hometown_state' not in st.session_state:
         st.session_state.hometown_state = None
     if 'hometown_district' not in st.session_state:
@@ -280,6 +289,8 @@ def main():
         st.session_state.motivation = ""
     if 'problems' not in st.session_state:
         st.session_state.problems = ""
+    if 'professor_name' not in st.session_state:
+        st.session_state.professor_name = ""
     if 'professor_phone' not in st.session_state:
         st.session_state.professor_phone = ""
 
@@ -309,10 +320,19 @@ def main():
         # Validate email
         if email:
             is_valid, message = validate_email(email)
+
             if not is_valid:
-                st.error(message)
-            else:
-                st.success(message)
+                if message == "already_registered":
+                    st.markdown(
+                        "<div style='background-color:#fff3cd; color:#856404; padding:10px; border-radius:5px; font-weight:bold;'>"
+                        "Already registered!!! Log in, try another email, or contact support."
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.error(message)
+  
+
         
         render_form_field("Are you a Woman/Female?")
         gender = st.radio("", ["Yes", "No"], index=0 if st.session_state.is_female is None else (0 if st.session_state.is_female else 1), label_visibility="collapsed")
@@ -390,7 +410,7 @@ def main():
 
             # 3. Current Degree Level
             render_form_field("Current Degree Level")
-            degrees = fetch_data(engine, 'SELECT DISTINCT "Display_name" FROM staging."course_mapping" ORDER BY "Display_name"', "Display_name")
+            degrees = fetch_data(engine, 'SELECT DISTINCT "display_name" FROM vg_prod."course_mapping" ORDER BY "display_name"', "display_name")
             current_degree = st.selectbox(
                 "",
                 degrees,
@@ -400,7 +420,7 @@ def main():
 
             # 4. University Name
             render_form_field("University Name")
-            universities = fetch_data(engine, 'SELECT DISTINCT "Standard_University_Names" FROM staging."college_mapping" ORDER BY "Standard_University_Names"', "Standard_University_Names")
+            universities = fetch_data(engine, 'SELECT DISTINCT "standard_university_names" FROM vg_prod."university_mapping" ORDER BY "standard_university_names"', "standard_university_names")
             selected_university = st.selectbox(
                 "",
                 universities,
@@ -408,15 +428,41 @@ def main():
                 label_visibility="collapsed"
             ) if universities else None
 
-            # 5. College Name
+               # 5. College Name
             render_form_field("College Name")
-            colleges = fetch_data(engine, 'SELECT DISTINCT "Standard_College_Names" FROM staging."college_mapping" ORDER BY "Standard_College_Names"', "Standard_College_Names")
+            # Show helper note below the field title
+            st.markdown(
+                "<div style='margin-top: -1rem; font-size: 0.85rem; color: gray;'>"
+                "If you didn't find your college, select <b>Other</b> as College Name and type it manually."
+                "</div>",
+                unsafe_allow_html=True
+)
+            colleges = fetch_data(engine, 'SELECT DISTINCT "standard_college_names" FROM vg_prod."college_mapping" ORDER BY "standard_college_names"', "standard_college_names")
+
+            # Add "Other" option manually
+            colleges.append("Other")
+
             selected_college = st.selectbox(
                 "",
                 colleges,
                 index=colleges.index(st.session_state.selected_college) if st.session_state.selected_college in colleges else 0,
                 label_visibility="collapsed"
-            ) if colleges else None
+            )
+
+            st.session_state.selected_college = selected_college
+
+            # If 'Other' is selected, ask for manual input
+            new_college_name = ""
+            if selected_college == "Other":
+                render_form_field("Enter your College Name")
+                new_college_name = st.text_input(
+                    "", 
+                    value=st.session_state.get("new_college_name", ""),
+                    placeholder="Enter your college name manually", 
+                    label_visibility="collapsed"
+                )
+                st.session_state.new_college_name = new_college_name
+
 
             # 6. College Location - State
             render_form_field("College State/Union Territory")
@@ -462,7 +508,7 @@ def main():
 
             # 9. Primary Subject Area
             render_form_field("Currently Pursuing Subject Area")
-            subject_areas = fetch_data(engine, 'SELECT DISTINCT "sub_field" FROM staging."subject_mapping" ORDER BY "sub_field"', "sub_field")
+            subject_areas = fetch_data(engine, 'SELECT DISTINCT "sub_field" FROM vg_prod."subject_mapping" ORDER BY "sub_field"', "sub_field")
             
             # Filter out any invalid default values
             valid_defaults = [subject for subject in st.session_state.selected_subjects if subject in subject_areas]
@@ -516,7 +562,7 @@ def main():
         # Get database connection
         engine = get_db_connection()
         
-        # 1. WhatsApp Number
+        # 1.a WhatsApp Number
         render_form_field("WhatsApp Number")
         whatsapp = st.text_input("", value=st.session_state.whatsapp, placeholder="Enter your 10-digit WhatsApp number", label_visibility="collapsed")
         if whatsapp:
@@ -524,6 +570,23 @@ def main():
             if not is_valid:
                 st.error(message)
 
+        # 1.b. Date of Birth
+        render_form_field("Date of Birth")
+        #Ensure value is always a datetime.date
+        default_dob = datetime.date(2005, 1, 1)
+        dob = st.session_state.get("dob", default_dob)
+
+        if not isinstance(dob, (datetime.date, datetime.datetime)):
+            dob = default_dob  # fallback in case dob is invalid
+
+        st.session_state.dob = st.date_input(
+            "Date of Birth",
+            value=dob,
+            min_value=datetime.date(1970, 1, 1),
+            max_value=datetime.date.today(),
+            format="YYYY-MM-DD",
+            label_visibility="collapsed"
+        )
 
 
         # 2a.  Future Subject Area
@@ -532,7 +595,7 @@ def main():
         future_subject_areas = fetch_data(
             engine,
             '''SELECT DISTINCT "subject_area"
-            FROM staging."subject_mapping"
+            FROM vg_prod."subject_mapping"
             ORDER BY "subject_area"''',
             "subject_area"
         )
@@ -557,7 +620,7 @@ def main():
         future_sub_fields = fetch_data(
             engine,
             f'''SELECT DISTINCT "sub_field"
-                FROM staging."subject_mapping"
+                FROM vg_prod."subject_mapping"
                 WHERE "subject_area" = '{st.session_state.get("future_subject_area", "")}'
                 ORDER BY "sub_field"''',
             "sub_field"
@@ -644,12 +707,12 @@ def main():
         st.session_state.motivation = st.text_area(
             "",
             value=st.session_state.motivation,
-            placeholder="In 50 words or more, describe why you are applying for this program",
-            help="Minimum 50 words required",
+            placeholder="In 50 characters or more, describe why you are applying for this program",
+            help="Minimum 50 characters required",
             label_visibility="collapsed"
         )
         if st.session_state.motivation:
-            is_valid, message = validate_word_count(st.session_state.motivation, 50)
+            is_valid, message = validate_character_count(st.session_state.motivation, 50)
             if not is_valid:
                 st.error(message)
 
@@ -658,16 +721,26 @@ def main():
         st.session_state.problems = st.text_area(
             "",
             value=st.session_state.problems,
-            placeholder="In 50 words or more, describe the biggest challenges you face in your studies and career",
-            help="Minimum 50 words required",
+            placeholder="In 50 characters or more, describe the biggest challenges you face in your studies and career",
+            help="Minimum 50 characters required",
             label_visibility="collapsed"
         )
         if st.session_state.problems:
-            is_valid, message = validate_word_count(st.session_state.problems, 50)
+            is_valid, message = validate_character_count(st.session_state.problems, 50)
             if not is_valid:
                 st.error(message)
 
-        # 10. Professor's Phone (Optional)
+        # 9. Professor's Name (Optional)
+        render_form_field("Professor's Full Name", required=False)
+        professor_name = st.text_input(
+            "",
+            value=st.session_state.get("professor_name", ""),
+            placeholder="Enter full name of the professor",
+            label_visibility="collapsed"
+            )
+        st.session_state.professor_name = professor_name
+
+        # 11. Professor's Phone (Optional)
         render_form_field("Professor's Contact Number", required=False)
         professor_phone = st.text_input(
             "",
@@ -681,17 +754,18 @@ def main():
                 st.error(message)
 
         if st.button("Submit Registration", type="primary"):
+            submission_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             errors = []
 
             is_valid, message = validate_phone(whatsapp)
             if not is_valid:
                 errors.append(f"WhatsApp number: {message}")
 
-            is_valid, message = validate_word_count(st.session_state.motivation, 50)
+            is_valid, message = validate_character_count(st.session_state.motivation, 50)
             if not is_valid:
                 errors.append(f"Motivation: {message}")
 
-            is_valid, message = validate_word_count(st.session_state.problems, 50)
+            is_valid, message = validate_character_count(st.session_state.problems, 50)
             if not is_valid:
                 errors.append(f"Challenges: {message}")
 
@@ -707,36 +781,41 @@ def main():
                 try:
                     if engine:
                         data = {
-                            'email': st.session_state.email,
-                            'gender': "Female",
-                            'full_name': st.session_state.full_name,
-                            'whatsapp_phone_number': whatsapp,
-                            'currently_pursuing_year': st.session_state.academic_year,
-                            'currently_pursuing_degree': st.session_state.current_degree,
-                            'university': st.session_state.selected_university,
-                            'country': "India",
-                            'college': st.session_state.selected_college,
-                            'college_state_union_territory': st.session_state.college_state,
-                            'college_district': st.session_state.college_district,
-                            'college_city_category': st.session_state.college_city_category,
-                            'pursuing_subjects': st.session_state.selected_subjects,
-                            'interest_subject_area': st.session_state.future_subject_area,
-                            'interest_sub_field': st.session_state.future_sub_field,
-                            'hometown_state_union_territory': st.session_state.hometown_state,
-                            'hometown_district': st.session_state.hometown_district,
-                            'hometown_city_category': st.session_state.hometown_city_category,
-                            'caste_category': st.session_state.caste_category,
-                            'annual_family_income': st.session_state.income_range,
-                            'motivation': st.session_state.motivation,
-                            'problems': st.session_state.problems,
-                            'professor_phone_number': professor_phone
-                        }
+                        'Email': st.session_state.email,
+                        'Gender': "Female",
+                        'Name': st.session_state.full_name,
+                        'Phone': whatsapp,
+                        'Date_of_Birth': st.session_state.dob.strftime("%Y-%m-%d") if st.session_state.dob else None,
+                        'Currently_Pursuing_Year': st.session_state.academic_year,
+                        'Currently_Pursuing_Degree': st.session_state.current_degree,
+                        'University': st.session_state.selected_university,
+                        'Country': "India",
+                        'Name_of_College_University': st.session_state.selected_college,
+                        'College_State_Union_Territory': st.session_state.college_state,
+                        'College_District': st.session_state.college_district,
+                        'College_City_Category': st.session_state.college_city_category,
+                        'Subject_Area': ', '.join(st.session_state.selected_subjects),
+                        'Interest_Subject_Area': st.session_state.future_subject_area,
+                        'Interest_Sub_Field': st.session_state.future_sub_field,
+                        'State_Union_Territory': st.session_state.hometown_state,
+                        'District': st.session_state.hometown_district,
+                        'City_Category': st.session_state.hometown_city_category,
+                        'Caste_Category': st.session_state.caste_category,
+                        'Annual_Family_Income': st.session_state.income_range,
+                        'Motivation': st.session_state.motivation,
+                        'Problems': st.session_state.problems,
+                        'Professor_Name': professor_name,
+                        'Professor_Phone_Number': professor_phone,
+                        'New_College_Name': st.session_state.get("new_college_name", "") if st.session_state.selected_college == "Other" else None,
+                        'Submission_Timestamp': submission_timestamp
+                    }
+
 
                         df = pd.DataFrame([data])
-                        df.to_sql('general_information_sheet_t', engine, schema='raw', if_exists='append', index=False)
+                        df.to_sql('general_information_sheet', engine, schema='vg_prod', if_exists='append', index=False)
 
                         st.session_state.page = "thank_you"
-                        st.rerun()()  # Prevent rerun to keep message on screen
+                        st.rerun()
 
                     else:
                         st.error("Could not connect to database")
