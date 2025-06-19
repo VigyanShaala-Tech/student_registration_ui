@@ -79,18 +79,18 @@ def fetch_location_data(_engine, state=None, district=None, is_hometown=False):
     try:
         if state and district:
             query = f'''SELECT DISTINCT "city_category" 
-                       FROM vg_prod."location_mapping" 
+                       FROM intermediate."location_mapping" 
                        WHERE "state_union_territory" = '{state}'
                        AND "district" = '{district}'
                        ORDER BY "city_category"'''
         elif state:
             query = f'''SELECT DISTINCT "district"     
-                       FROM vg_prod."location_mapping" 
+                       FROM intermediate."location_mapping" 
                        WHERE "state_union_territory" = '{state}'
                        ORDER BY "district"'''
         else:
             query = f'''SELECT DISTINCT "state_union_territory" 
-                       FROM vg_prod."location_mapping" 
+                       FROM intermediate."location_mapping" 
                        WHERE "country" = 'India' 
                        ORDER BY "state_union_territory"'''
         
@@ -160,7 +160,7 @@ def validate_email(email):
             return False, "Could not connect to the database"
 
         with engine.connect() as conn:
-            query = text('SELECT "Email" FROM vg_prod.general_information_sheet WHERE LOWER("Email") = LOWER(:Email)')
+            query = text('SELECT "Email" FROM raw.general_information_sheet WHERE LOWER("Email") = LOWER(:Email)')
             result = conn.execute(query, {"Email": email})
             row = result.fetchone()
 
@@ -410,7 +410,7 @@ def main():
 
             # 3. Current Degree Level
             render_form_field("Current Degree Level")
-            degrees = fetch_data(engine, 'SELECT DISTINCT "display_name" FROM vg_prod."course_mapping" ORDER BY "display_name"', "display_name")
+            degrees = fetch_data(engine, 'SELECT DISTINCT "display_name" FROM intermediate."course_mapping" ORDER BY "display_name"', "display_name")
             current_degree = st.selectbox(
                 "",
                 degrees,
@@ -420,7 +420,7 @@ def main():
 
             # 4. University Name
             render_form_field("University Name")
-            universities = fetch_data(engine, 'SELECT DISTINCT "standard_university_names" FROM vg_prod."university_mapping" ORDER BY "standard_university_names"', "standard_university_names")
+            universities = fetch_data(engine, 'SELECT DISTINCT "standard_university_names" FROM intermediate."university_mapping" ORDER BY "standard_university_names"', "standard_university_names")
             selected_university = st.selectbox(
                 "",
                 universities,
@@ -437,7 +437,7 @@ def main():
                 "</div>",
                 unsafe_allow_html=True
 )
-            colleges = fetch_data(engine, 'SELECT DISTINCT "standard_college_names" FROM vg_prod."college_mapping" ORDER BY "standard_college_names"', "standard_college_names")
+            colleges = fetch_data(engine, 'SELECT DISTINCT "standard_college_names" FROM intermediate."college_mapping" ORDER BY "standard_college_names"', "standard_college_names")
 
             # Add "Other" option manually
             colleges.append("Other")
@@ -506,9 +506,9 @@ def main():
 
 
 
-            # 9. Primary Subject Areas
+            # 9. Primary Subject Areasgit commit -m "review_for_final_registration_ui"
             render_form_field("Currently Pursuing Subject Areas")
-            subject_areas = fetch_data(engine, 'SELECT DISTINCT "sub_field" FROM vg_prod."subject_mapping" ORDER BY "sub_field"', "sub_field")
+            subject_areas = fetch_data(engine, 'SELECT DISTINCT "sub_field" FROM intermediate."subject_mapping" ORDER BY "sub_field"', "sub_field")
             
             # Filter out any invalid default values
             valid_defaults = [subject for subject in st.session_state.selected_subjects if subject in subject_areas]
@@ -595,7 +595,7 @@ def main():
         future_subject_areas = fetch_data(
             engine,
             '''SELECT DISTINCT "subject_area"
-            FROM vg_prod."subject_mapping"
+            FROM intermediate."subject_mapping"
             ORDER BY "subject_area"''',
             "subject_area"
         )
@@ -620,7 +620,7 @@ def main():
         future_sub_fields = fetch_data(
             engine,
             f'''SELECT DISTINCT "sub_field"
-                FROM vg_prod."subject_mapping"
+                FROM intermediate."subject_mapping"
                 WHERE "subject_area" = '{st.session_state.get("future_subject_area", "")}'
                 ORDER BY "sub_field"''',
             "sub_field"
@@ -812,7 +812,7 @@ def main():
 
 
                         df = pd.DataFrame([data])
-                        df.to_sql('general_information_sheet', engine, schema='vg_prod', if_exists='append', index=False)
+                        df.to_sql('general_information_sheet', engine, schema='raw', if_exists='append', index=False)
 
                         st.session_state.page = "thank_you"
                         st.rerun()
