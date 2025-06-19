@@ -506,8 +506,8 @@ def main():
 
 
 
-            # 9. Primary Subject Area
-            render_form_field("Currently Pursuing Subject Area")
+            # 9. Primary Subject Areas
+            render_form_field("Currently Pursuing Subject Areas")
             subject_areas = fetch_data(engine, 'SELECT DISTINCT "sub_field" FROM vg_prod."subject_mapping" ORDER BY "sub_field"', "sub_field")
             
             # Filter out any invalid default values
