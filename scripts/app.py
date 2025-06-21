@@ -433,14 +433,14 @@ def main():
             # Show helper note below the field title
             st.markdown(
                 "<div style='margin-top: -1rem; font-size: 0.85rem; color: gray;'>"
-                "If you didn't find your college, select <b>Other</b> as College Name and type it manually."
+                "If you didn't find your college, select <b>Others</b> as College Name and type it manually."
                 "</div>",
                 unsafe_allow_html=True
 )
             colleges = fetch_data(engine, 'SELECT DISTINCT "standard_college_names" FROM intermediate."college_mapping" ORDER BY "standard_college_names"', "standard_college_names")
 
-            # Add "Other" option manually
-            colleges.append("Other")
+            # Add "Others" option manually
+            colleges.append("Others")
 
             selected_college = st.selectbox(
                 "",
@@ -451,9 +451,9 @@ def main():
 
             st.session_state.selected_college = selected_college
 
-            # If 'Other' is selected, ask for manual input
+            # If 'Others' is selected, ask for manual input
             new_college_name = ""
-            if selected_college == "Other":
+            if selected_college == "Others":
                 render_form_field("Enter your College Name")
                 new_college_name = st.text_input(
                     "", 
