@@ -165,7 +165,7 @@ def validate_email(email):
             row = result.fetchone()
 
             if row:
-                return False, "already_registered"
+                return False, "You’ve already registered."
     except Exception as e:
         return False, f"Database error while checking email: {str(e)}"
 
@@ -259,6 +259,8 @@ def main():
         st.session_state.current_degree = None
     if 'selected_university' not in st.session_state:
         st.session_state.selected_university = None
+    if 'new_university_name' not in st.session_state:
+        st.session_state.new_university_name = None
     if 'selected_college' not in st.session_state:
         st.session_state.selected_college = None
     if 'new_college_name' not in st.session_state:
@@ -275,6 +277,10 @@ def main():
         st.session_state.whatsapp = ""
     if 'dob' not in st.session_state:
         st.session_state.dob = ""
+    if "future_subject_area" not in st.session_state:
+        st.session_state.future_subject_area = None
+    if "future_sub_field" not in st.session_state:
+        st.session_state.future_sub_field = None
     if 'hometown_state' not in st.session_state:
         st.session_state.hometown_state = None
     if 'hometown_district' not in st.session_state:
@@ -293,6 +299,8 @@ def main():
         st.session_state.professor_name = ""
     if 'professor_phone' not in st.session_state:
         st.session_state.professor_phone = ""
+    if 'partner_organization' not in st.session_state:
+        st.session_state.partner_organization = None    
 
     if st.session_state.page == "thank_you":
         show_thank_you_page()
@@ -325,7 +333,7 @@ def main():
                 if message == "already_registered":
                     st.markdown(
                         "<div style='background-color:#fff3cd; color:#856404; padding:10px; border-radius:5px; font-weight:bold;'>"
-                        "Already registered!!! Log in, try another email, or contact support."
+                        "Already registered!!! Log in, try another email, or contact support (+918983835993)."
                         "</div>",
                         unsafe_allow_html=True
                     )
@@ -354,29 +362,27 @@ def main():
         # About Us Section
         st.markdown("""
         #### About Us
+                    
         At VigyanShaala, we believe everyone should have the opportunity to create a better world through science. 
-        That's why our mission at VigyanShaala is to enable the innovators of tomorrow to achieve their dreams 
-        by bringing science, technology, and learning to their doorstep today. We are determined to create equity 
-        in STEM education and opportunities for the most marginalised across India. Through carefully developed 
-        ecosystems, we can eradicate inequalities and help even the most marginalized-- those who must innovate 
-        to survive - to thrive in STEM careers.
-
+        That's why our mission at VigyanShaala is to enable the innovators of tomorrow to achieve their dreams by bringing science, 
+        technology, and learning to their doorstep today. We are determined to create equity in STEM education and opportunities 
+        for the most marginalised across India. Through carefully developed ecosystems, we can eradicate inequalities and help 
+        even the most marginalized-- those who must innovate to survive - to thrive in STEM careers.
+                    
         #### What is She for STEM
-        Incubated and launched between lockdowns by Prof Ashutosh Kumar Sharma, then Secretary, DST., Program 
-        Kalpana is an online mentoring-career coaching fellowship designed to successfully place every fellow on 
-        a high confidence STEM path. With a strong emphasis on the elements of Individual Development Plan, 
-        Self-Efficacy strengthening and Research Grade Experimental Projects, over the last two years we have 
-        continuously evolved the program structure with active partnership of our mentees themselves. These 
-        experiences and skills equip our fellows for marching into a high confidence trajectory towards scientific 
-        jobs or higher studies in STEM at leading global and national universities.
+        Incubated and launched between lockdowns by Prof. Ashutosh Kumar Sharma, then Secretary, DST., Program She for STEM(Kalpana) 
+        is an online mentoring-career coaching fellowship designed to successfully place every fellow on a high confidence STEM path. 
+        With a strong emphasis on the elements of Individual Development Plan, Self-Efficacy strengthening and 
+        Research Grade Experimental Projects, over the last two years we have continuously evolved the program structure with 
+        active partnership of our mentees themselves. These experiences and skills equip our fellows for marching into a high confidence 
+        trajectory towards scientific jobs or higher studies in STEM at leading global and national universities.
 
         #### Who is it for
-        It is for all enthusiastic and aspiring Female Undergraduates and postgraduates in Science, Technology, 
-        Engineering and Math (STEM). The three key pillars we look for in a Kalpana Fellow are ACT - Ambition, 
-        Commitment and Talent.
+        The program is open to all enthusiastic and aspiring Female Undergraduates and postgraduates in Science, Technology, Engineering 
+        and Math (STEM).The three key pillars we look for in a She for STEM Fellow are ACT - Ambition, Commitment and Talent.
 
-        The first cohort of 'She for STEM' was launched by Honorable Governor of Uttarakhand (Retd.) Lt. General 
-        Gurmit Singh on 10th August 2024.
+        The first cohort of 'She for STEM' was launched by Honorable Governor of Uttarakhand (Retd.) Lt. General Gurmit Singh on 10th August 2024.
+                    
         """)
 
     # Page 2: Gender Check and College/Academic Information
@@ -404,103 +410,140 @@ def main():
             academic_year = st.selectbox(
                 "",
                 ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-                index=["1st Year", "2nd Year", "3rd Year", "4th Year"].index(st.session_state.academic_year) if st.session_state.academic_year else 0,
+                index=["1st Year", "2nd Year", "3rd Year", "4th Year"].index(st.session_state.academic_year)
+                if st.session_state.academic_year else None,
+                placeholder="Select your current academic year",
                 label_visibility="collapsed"
             )
-
             # 3. Current Degree Level
             render_form_field("Current Degree Level")
             degrees = fetch_data(engine, 'SELECT DISTINCT "display_name" FROM intermediate."course_mapping" ORDER BY "display_name"', "display_name")
             current_degree = st.selectbox(
                 "",
                 degrees,
-                index=degrees.index(st.session_state.current_degree) if st.session_state.current_degree in degrees else 0,
+                index=degrees.index(st.session_state.current_degree)
+                if st.session_state.current_degree in degrees else None,
+                placeholder="Select your current degree level",
                 label_visibility="collapsed"
             ) if degrees else None
 
             # 4. University Name
             render_form_field("University Name")
+            st.markdown(
+                "<div style='margin-top: -1rem; font-size: 0.85rem; color: gray;'>"
+                "If your university isn't listed, select <b>Others</b> and enter the name manually."
+                "</div>",
+                unsafe_allow_html=True
+            )
             universities = fetch_data(engine, 'SELECT DISTINCT "standard_university_names" FROM intermediate."university_mapping" ORDER BY "standard_university_names"', "standard_university_names")
+            universities.append("Others")
+
             selected_university = st.selectbox(
                 "",
                 universities,
-                index=universities.index(st.session_state.selected_university) if st.session_state.selected_university in universities else 0,
+                index=universities.index(st.session_state.selected_university)
+                if st.session_state.selected_university in universities else None,
+                placeholder="Search or select your university",
                 label_visibility="collapsed"
-            ) if universities else None
+            )
 
-               # 5. College Name
+            # If 'Others' is selected, ask for manual input
+            new_university_name = ""
+            if selected_university == "Others":
+                render_form_field("Enter your University Name")
+                new_university_name = st.text_input(
+                    "",
+                    value=st.session_state.new_university_name,
+                    placeholder="Enter your university name manually",
+                    label_visibility="collapsed"
+                )
+            
+
+            # 5. College Name
             render_form_field("College Name")
-            # Show helper note below the field title
             st.markdown(
                 "<div style='margin-top: -1rem; font-size: 0.85rem; color: gray;'>"
-                "If you didn't find your college, select <b>Others</b> as College Name and type it manually."
+                "If your college isn't listed, select <b>Others</b> and enter the name manually."
                 "</div>",
                 unsafe_allow_html=True
-)
+            )
             colleges = fetch_data(engine, 'SELECT DISTINCT "standard_college_names" FROM intermediate."college_mapping" ORDER BY "standard_college_names"', "standard_college_names")
-
-            # Add "Others" option manually
             colleges.append("Others")
 
             selected_college = st.selectbox(
                 "",
                 colleges,
-                index=colleges.index(st.session_state.selected_college) if st.session_state.selected_college in colleges else 0,
+                index=colleges.index(st.session_state.selected_college)
+                if st.session_state.selected_college in colleges else None,
+                placeholder="Search or select your college",
                 label_visibility="collapsed"
             )
-
-            st.session_state.selected_college = selected_college
+            
 
             # If 'Others' is selected, ask for manual input
             new_college_name = ""
             if selected_college == "Others":
                 render_form_field("Enter your College Name")
                 new_college_name = st.text_input(
-                    "", 
-                    value=st.session_state.get("new_college_name", ""),
-                    placeholder="Enter your college name manually", 
+                    "",
+                    value=st.session_state.new_college_name,
+                    placeholder="Enter your college name manually",
                     label_visibility="collapsed"
                 )
-                st.session_state.new_college_name = new_college_name
+            
 
 
             # 6. College Location - State
             render_form_field("College State/Union Territory")
             states = fetch_location_data(engine)
+
             college_state = st.selectbox(
                 "",
                 states,
-                index=states.index(st.session_state.college_state) if st.session_state.college_state in states else 0,
+                index=states.index(st.session_state.college_state)
+                if st.session_state.college_state in states else None,
+                placeholder="Select your college state",
                 key='college_state_selector',
-                on_change=lambda: setattr(st.session_state, 'college_district', None),
                 label_visibility="collapsed"
             ) if states else None
-            
-            if college_state != st.session_state.college_state:
-                st.session_state.college_state = college_state
-                st.session_state.college_district = None
+
+          
+            st.session_state.college_state = college_state
+
 
             # 7. College Location - District
             render_form_field("College District")
             college_districts = fetch_location_data(engine, st.session_state.college_state) if st.session_state.college_state else []
+
             college_district = st.selectbox(
                 "",
                 college_districts,
-                index=college_districts.index(st.session_state.college_district) if st.session_state.college_district in college_districts else 0,
+                index=college_districts.index(st.session_state.college_district)
+                if st.session_state.college_district in college_districts else None,
+                placeholder="Select your college district",
                 key='college_district_selector',
                 label_visibility="collapsed"
             ) if college_districts else None
-            
-            if college_district != st.session_state.college_district:
-                st.session_state.college_district = college_district
+
+            st.session_state.college_district = college_district
+
 
             # 8. College City Category
             render_form_field("College City Category")
-            college_city_categories = fetch_location_data(engine, st.session_state.college_state, st.session_state.college_district) if st.session_state.college_state and st.session_state.college_district else []
+            college_city_categories = fetch_location_data(
+                engine,
+                st.session_state.college_state,
+                st.session_state.college_district
+            ) if st.session_state.college_state and st.session_state.college_district else []
+
+
+
             college_city_category = st.selectbox(
                 "",
                 college_city_categories,
-                index=college_city_categories.index(st.session_state.college_city_category) if st.session_state.college_city_category in college_city_categories else 0,
+                index=college_city_categories.index(st.session_state.college_city_category)
+                if st.session_state.college_city_category in college_city_categories else None,
+                placeholder="Select your college city category",
                 label_visibility="collapsed"
             ) if college_city_categories else None
 
@@ -518,6 +561,7 @@ def main():
                 options=subject_areas,
                 default=valid_defaults,
                 max_selections=4,
+                placeholder="Search and select up to 4 subject areas",
                 label_visibility="collapsed"
             )
 
@@ -541,7 +585,9 @@ def main():
                     st.session_state.academic_year = academic_year
                     st.session_state.current_degree = current_degree
                     st.session_state.selected_university = selected_university
+                    st.session_state.new_university_name = new_university_name
                     st.session_state.selected_college = selected_college
+                    st.session_state.new_college_name = new_college_name
                     st.session_state.college_state = college_state
                     st.session_state.college_district = college_district
                     st.session_state.college_city_category = college_city_category
@@ -569,27 +615,24 @@ def main():
             is_valid, message = validate_phone(whatsapp)
             if not is_valid:
                 st.error(message)
+        st.session_state.whatsapp = whatsapp
 
         # 1.b. Date of Birth
         render_form_field("Date of Birth")
-        #Ensure value is always a datetime.date
-        default_dob = datetime.date(2005, 1, 1)
-        dob = st.session_state.get("dob", default_dob)
 
-        if not isinstance(dob, (datetime.date, datetime.datetime)):
-            dob = default_dob  # fallback in case dob is invalid
-
-        st.session_state.dob = st.date_input(
-            "Date of Birth",
-            value=dob,
+        dob = st.date_input(
+            "",
+            value=None,
             min_value=datetime.date(1970, 1, 1),
             max_value=datetime.date.today(),
             format="YYYY-MM-DD",
             label_visibility="collapsed"
         )
 
+        st.session_state.dob = dob
 
-        # 2a.  Future Subject Area
+
+        # 2a. Future Subject Area
         render_form_field("Which subject area do you want to pursue in future?")
 
         future_subject_areas = fetch_data(
@@ -600,21 +643,21 @@ def main():
             "subject_area"
         )
 
-        st.selectbox(
+        # Render selectbox with placeholder
+        future_subject_area = st.selectbox(
             "",
             future_subject_areas,
-            index=(
-                future_subject_areas.index(st.session_state.future_subject_area)
-                if st.session_state.get("future_subject_area") in future_subject_areas
-                else 0
-            ) if future_subject_areas else 0,
-            key="future_subject_area",           # ← let Streamlit manage state for us
-            on_change=lambda: st.session_state.pop("future_sub_field", None),
+            index=future_subject_areas.index(st.session_state.future_subject_area)
+            if st.session_state.future_subject_area in future_subject_areas else None,
+            placeholder="Search or select subject area",
+            key="future_subject_area_selector",
             label_visibility="collapsed"
-        )
+        ) if future_subject_areas else None
 
-        # 2b.  Future Sub‑field (depends on subject area)
+        st.session_state.future_subject_area = future_subject_area
 
+
+        # 2b. Future Sub‑field
         render_form_field("Which sub-field do you want to pursue in it?")
 
         future_sub_fields = fetch_data(
@@ -626,132 +669,197 @@ def main():
             "sub_field"
         ) if st.session_state.get("future_subject_area") else []
 
-        st.selectbox(
+        future_sub_field = st.selectbox(
             "",
             future_sub_fields,
-            index=(
-                future_sub_fields.index(st.session_state.future_sub_field)
-                if st.session_state.get("future_sub_field") in future_sub_fields
-                else 0
-            ) if future_sub_fields else 0,
-            key="future_sub_field",
+            index=future_sub_fields.index(st.session_state.future_sub_field)
+            if st.session_state.future_sub_field in future_sub_fields else None,
+            placeholder="Search or select sub-field",
+            key="future_sub_field_selector",
             label_visibility="collapsed"
-        )
+        ) if future_sub_fields else None
 
+        st.session_state.future_sub_field = future_sub_field
 
         # 3. Hometown/Origin - State
         render_form_field("Hometown State/Union Territory")
         hometown_states = fetch_location_data(engine, is_hometown=True)
+
         hometown_state = st.selectbox(
             "",
             hometown_states,
-            index=hometown_states.index(st.session_state.hometown_state) if st.session_state.hometown_state in hometown_states else 0,
+            index=(
+                hometown_states.index(st.session_state.hometown_state)
+                if st.session_state.hometown_state in hometown_states else None
+            ),
+            placeholder="Search or select your hometown state",
             key='hometown_state_selector',
             on_change=lambda: setattr(st.session_state, 'hometown_district', None),
             label_visibility="collapsed"
         ) if hometown_states else None
-        
-        if hometown_state != st.session_state.hometown_state:
-            st.session_state.hometown_state = hometown_state
-            st.session_state.hometown_district = None
 
-        
+ 
+        st.session_state.hometown_state = hometown_state
+            
+                
 
         # 4. Hometown/Origin - District
         render_form_field("Hometown District")
         hometown_districts = fetch_location_data(engine, st.session_state.hometown_state, is_hometown=True) if st.session_state.hometown_state else []
+
         hometown_district = st.selectbox(
             "",
             hometown_districts,
-            index=hometown_districts.index(st.session_state.hometown_district) if st.session_state.hometown_district in hometown_districts else 0,
+            index=(
+                hometown_districts.index(st.session_state.hometown_district)
+                if st.session_state.hometown_district in hometown_districts else None
+            ),
             key='hometown_district_selector',
+            placeholder="Search or select your hometown district",
             label_visibility="collapsed"
         ) if hometown_districts else None
-        
-        if hometown_district != st.session_state.hometown_district:
-            st.session_state.hometown_district = hometown_district
+
+        st.session_state.hometown_district = hometown_district
 
         # 5. Hometown City Category
         render_form_field("Hometown City Category")
-        st.session_state.hometown_city_category = st.selectbox(
+        hometown_city_categories = fetch_location_data(
+            engine,
+            st.session_state.hometown_state,
+            st.session_state.hometown_district,
+            is_hometown=True
+        ) if st.session_state.hometown_state and st.session_state.hometown_district else []
+
+        hometown_city_category = st.selectbox(
             "",
-            fetch_location_data(engine, st.session_state.hometown_state, st.session_state.hometown_district, is_hometown=True) if st.session_state.hometown_state and st.session_state.hometown_district else [],
+            hometown_city_categories,
             index=(
-                fetch_location_data(engine, st.session_state.hometown_state, st.session_state.hometown_district, is_hometown=True).index(st.session_state.hometown_city_category)
-                if st.session_state.hometown_state and st.session_state.hometown_district and st.session_state.hometown_city_category in fetch_location_data(engine, st.session_state.hometown_state, st.session_state.hometown_district, is_hometown=True)
-                else 0
-            ) if st.session_state.hometown_state and st.session_state.hometown_district else 0,
+                hometown_city_categories.index(st.session_state.hometown_city_category)
+                if st.session_state.hometown_city_category in hometown_city_categories else None
+            ),
+            placeholder="Select your hometown city category",
             label_visibility="collapsed"
-        )
+        ) if hometown_city_categories else None
+
+        st.session_state.hometown_city_category = hometown_city_category
 
         # 6. Caste/Category
         render_form_field("Caste/Category")
-        st.session_state.caste_category = st.selectbox(
+        caste_options = ["General", "OBC", "SC/ST", "Other", "Prefer not to say"]
+        caste_category = st.selectbox(
             "",
-            ["General", "OBC", "SC/ST", "Other", "Prefer not to say"],
-            index=["General", "OBC", "SC/ST", "Other", "Prefer not to say"].index(st.session_state.caste_category) if st.session_state.caste_category else 0,
+            caste_options,
+            index=caste_options.index(st.session_state.caste_category) if st.session_state.caste_category in caste_options else None,
+            placeholder="Select your caste/category",
             label_visibility="collapsed"
         )
+        st.session_state.caste_category = caste_category
 
         # 7. Annual Household Income
         render_form_field("Annual Household Income")
-        st.session_state.income_range = st.selectbox(
+        income_options = [
+            "Below or Equal to 3 lacs per year (INR)",
+            "Between 3-5 lacs (INR) per year",
+            "Above 5 lacs per year (INR)"
+        ]
+        income_range = st.selectbox(
             "",
-            ["Below or Equal to 3 lacs per year (INR)", "Between 3-5 lacs (INR) per year", "Above 5 lacs per year (INR)"],
-            index=["Below or Equal to 3 lacs per year (INR)", "Between 3-5 lacs (INR) per year", "Above 5 lacs per year (INR)"].index(st.session_state.income_range) if st.session_state.income_range else 0,
+            income_options,
+            index=income_options.index(st.session_state.income_range) if st.session_state.income_range in income_options else None,
+            placeholder="Select your income range",
             label_visibility="collapsed"
         )
+        st.session_state.income_range = income_range
 
         # 8. Motivation
         render_form_field("Why are you applying for this program?")
-        st.session_state.motivation = st.text_area(
+        motivation = st.text_area(
             "",
-            value=st.session_state.motivation,
+            value=st.session_state.get("motivation", ""),
             placeholder="In 50 characters or more, describe why you are applying for this program",
             help="Minimum 50 characters required",
             label_visibility="collapsed"
         )
-        if st.session_state.motivation:
-            is_valid, message = validate_character_count(st.session_state.motivation, 50)
+        st.session_state.motivation = motivation
+        if motivation:
+            is_valid, message = validate_character_count(motivation, 50)
             if not is_valid:
                 st.error(message)
 
         # 9. Challenges
         render_form_field("What challenges do you face in your studies and career?")
-        st.session_state.problems = st.text_area(
+        problems = st.text_area(
             "",
-            value=st.session_state.problems,
+            value=st.session_state.get("problems", ""),
             placeholder="In 50 characters or more, describe the biggest challenges you face in your studies and career",
             help="Minimum 50 characters required",
             label_visibility="collapsed"
         )
-        if st.session_state.problems:
-            is_valid, message = validate_character_count(st.session_state.problems, 50)
+        st.session_state.problems = problems
+        if problems:
+            is_valid, message = validate_character_count(problems, 50)
             if not is_valid:
                 st.error(message)
 
-        # 9. Professor's Name (Optional)
-        render_form_field("Professor's Full Name", required=False)
+        # 10. Professor's Name (Optional)
+        render_form_field("If possible, please enter the full name of an inspiring professor from your college who may be open to collaboration.(Optional)", required=False)
         professor_name = st.text_input(
             "",
             value=st.session_state.get("professor_name", ""),
             placeholder="Enter full name of the professor",
             label_visibility="collapsed"
-            )
+        )
         st.session_state.professor_name = professor_name
 
         # 11. Professor's Phone (Optional)
-        render_form_field("Professor's Contact Number", required=False)
+        render_form_field("Professor's contact number.(Optional)", required=False)
         professor_phone = st.text_input(
             "",
-            value=st.session_state.professor_phone,
-            placeholder="Enter the phone number of a motivated professor from your college who inspires you and may be interested in collaborating with us",
+            value=st.session_state.get("professor_phone", ""),
+            placeholder="Enter the professor's 10-digit phone number",
             label_visibility="collapsed"
         )
+
         if professor_phone:
-            is_valid, message = validate_phone(professor_phone)
-            if not is_valid:
-                st.error(message)
+                is_valid, message = validate_phone(professor_phone)
+                if not is_valid:
+                    st.error(message)    
+
+        st.session_state.professor_phone = professor_phone
+
+        # 12. Partner Organization (Optional)
+        render_form_field(
+            "Are you associated with any of the following partner organizations or chapters?",
+        )
+        st.markdown(
+                "<div style='margin-top: -1rem; font-size: 0.85rem; color: gray;'>"
+                "(If none, please select <b>“I’m applying on my own”</b>)"
+                "</div>",
+                unsafe_allow_html=True
+            )            
+
+        partner_options = [
+            "Christ University / Trivandrum Chapter",
+            "Christ University / Bangalore Chapter",
+            "Dr. Reddy’s Foundation – SASHAKTH",
+            "Eklavya Foundation",
+            "Udayan Care – Udayan Shalini Fellowship",
+            "I’m applying on my own (not through any organization)"
+        ]
+
+        partner_organization = st.selectbox(
+            "",
+            partner_options,
+            index=(
+                partner_options.index(st.session_state.partner_organization)
+                if st.session_state.get("partner_organization") in partner_options else None
+            ),
+            placeholder="Please select the one that applies to you the most.",
+            label_visibility="collapsed"
+        )
+
+        st.session_state.partner_organization = partner_organization
+  
 
         if st.button("Submit Registration", type="primary"):
             submission_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -760,20 +868,40 @@ def main():
             is_valid, message = validate_phone(whatsapp)
             if not is_valid:
                 errors.append(f"WhatsApp number: {message}")
-
-            is_valid, message = validate_character_count(st.session_state.motivation, 50)
-            if not is_valid:
-                errors.append(f"Motivation: {message}")
-
-            is_valid, message = validate_character_count(st.session_state.problems, 50)
-            if not is_valid:
-                errors.append(f"Challenges: {message}")
-
+            if not dob:
+                errors.append("Please enter your date of birth")
+            if not future_subject_area:
+                errors.append("Please select your future subject area")
+            if not future_sub_field:
+                errors.append("Please select your future sub-field")
+            if not hometown_state:
+                errors.append("Please select your hometown state")
+            if not hometown_district:
+                errors.append("Please select your hometown district")
+            if not hometown_city_category:
+                errors.append("Please select your hometown city category")
+            if not caste_category:
+                errors.append("Please select your caste/category")
+            if not income_range:
+                errors.append("Please select your income range")
+            if not motivation:
+                errors.append("Please enter your motivation")
+            else:
+                is_valid, message = validate_character_count(motivation, 50)
+                if not is_valid:
+                    errors.append(f"Motivation: {message}")
+            if not problems:
+                errors.append("Please enter your challenges")
+            else:
+                is_valid, message = validate_character_count(problems, 50)
+                if not is_valid:
+                    errors.append(f"Challenges: {message}")
             if professor_phone:
                 is_valid, message = validate_phone(professor_phone)
                 if not is_valid:
                     errors.append(f"Professor's phone: {message}")
-
+            if not partner_organization:
+                errors.append("Please select your partner organization")
             if errors:
                 for error in errors:
                     st.error(error)
@@ -781,42 +909,42 @@ def main():
                 try:
                     if engine:
                         data = {
-                        'Email': st.session_state.email,
-                        'Gender': "Female",
-                        'Name': st.session_state.full_name,
-                        'Phone': whatsapp,
-                        'Date_of_Birth': st.session_state.dob.strftime("%Y-%m-%d") if st.session_state.dob else None,
-                        'Currently_Pursuing_Year': st.session_state.academic_year,
-                        'Currently_Pursuing_Degree': st.session_state.current_degree,
-                        'University': st.session_state.selected_university,
-                        'Country': "India",
-                        'Name_of_College_University': st.session_state.selected_college,
-                        'College_State_Union_Territory': st.session_state.college_state,
-                        'College_District': st.session_state.college_district,
-                        'College_City_Category': st.session_state.college_city_category,
-                        'Subject_Area': ', '.join(st.session_state.selected_subjects),
-                        'Interest_Subject_Area': st.session_state.future_subject_area,
-                        'Interest_Sub_Field': st.session_state.future_sub_field,
-                        'State_Union_Territory': st.session_state.hometown_state,
-                        'District': st.session_state.hometown_district,
-                        'City_Category': st.session_state.hometown_city_category,
-                        'Caste_Category': st.session_state.caste_category,
-                        'Annual_Family_Income': st.session_state.income_range,
-                        'Motivation': st.session_state.motivation,
-                        'Problems': st.session_state.problems,
-                        'Professor_Name': professor_name,
-                        'Professor_Phone_Number': professor_phone,
-                        'New_College_Name': st.session_state.get("new_college_name", "") if st.session_state.selected_college == "Other" else None,
-                        'Submission_Timestamp': submission_timestamp
-                    }
-
+                            'Email': st.session_state.email,
+                            'Gender': "Female",
+                            'Name': st.session_state.full_name,
+                            'Phone': whatsapp,
+                            'Date_of_Birth': dob.strftime("%Y-%m-%d") if dob else None,
+                            'Currently_Pursuing_Year': st.session_state.academic_year,
+                            'Currently_Pursuing_Degree': st.session_state.current_degree,
+                            'University': st.session_state.selected_university,
+                            'new_university_name': st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
+                            'Country': "India",
+                            'Name_of_College_University': st.session_state.selected_college,
+                            'New_College_Name': st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
+                            'College_State_Union_Territory': st.session_state.college_state,
+                            'College_District': st.session_state.college_district,
+                            'College_City_Category': st.session_state.college_city_category,
+                            'Subject_Area': ', '.join(st.session_state.selected_subjects),
+                            'Interest_Subject_Area': future_subject_area,
+                            'Interest_Sub_Field': future_sub_field,
+                            'State_Union_Territory': hometown_state,
+                            'District': hometown_district,
+                            'City_Category': hometown_city_category,
+                            'Caste_Category': caste_category,
+                            'Annual_Family_Income': income_range,
+                            'Motivation': motivation,
+                            'Problems': problems,
+                            'Professor_Name': professor_name,
+                            'Professor_Phone_Number': professor_phone,
+                            'partner_organization': partner_organization,
+                            'Submission_Timestamp': submission_timestamp
+                        }
 
                         df = pd.DataFrame([data])
                         df.to_sql('general_information_sheet', engine, schema='raw', if_exists='append', index=False)
 
                         st.session_state.page = "thank_you"
                         st.rerun()
-
                     else:
                         st.error("Could not connect to database")
                 except Exception as e:
