@@ -572,9 +572,30 @@ def main():
             if st.button("Next"):
                 # Validate required fields for page 2
                 errors = []
-                
+
                 if not full_name:
                     errors.append("Please enter your full name")
+                if not academic_year:
+                    errors.append("Please select your academic year")
+                if not current_degree:
+                    errors.append("Please select your degree level")
+                if not selected_university:
+                    errors.append("Please select your university")
+                if selected_university == "Others" and not new_university_name:
+                    errors.append("Please enter your university name")
+                if not selected_college:
+                    errors.append("Please select your college")
+                if selected_college == "Others" and not new_college_name:
+                    errors.append("Please enter your college name")
+                if not college_state:
+                    errors.append("Please select your college state")
+                if not college_district:
+                    errors.append("Please select your college district")
+                if not college_city_category:
+                    errors.append("Please select your college city category")
+                if not selected_subjects:
+                    errors.append("Please select at least one subject area")
+
                 
                 if errors:
                     for error in errors:
