@@ -3,304 +3,69 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
+import json
+from typing import Union
 import re
 import datetime
+from modules.page_config import setup_she_for_stem_page
+from modules.validation import validate_email, get_email_suggestion, validate_phone, validate_character_count, render_form_field
+from modules.thankyou import show_thank_you_page
+from modules.db_connection import get_db_connection, fetch_data
+from modules.db_operations import fetch_location_data, insert_referral_college_professor, insert_student_registration, insert_student_education
+from modules.about_us import show_about_us
 
-
-# Set page config at the very beginning
-st.set_page_config(
-    page_title="She for STEM Program",
-    page_icon="👩‍🔬",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Display the PNG image in the top left corner of the Streamlit sidebar with custom dimensions
-image_path = "https://raw.githubusercontent.com/VigyanShaala-Tech/student_registration_ui/final_registration_ui/image/vslogo.png"
-st.markdown(
-    f'<div style="text-align:center"><img src="{image_path}" width="200"></div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    "<div style='text-align: center;margin-bottom: 30px;'>"
-    "<span style='font-size: 34px; font-weight: bold;'>She for STEM Program</span><br>"
-    "</div>", 
-    unsafe_allow_html=True
-)
+# Setup page
+setup_she_for_stem_page()
 
 # Load environment variables from config.env
 load_dotenv('config.env')
 
-@st.cache_resource
-def get_db_connection():
-    try:
-        db_user = os.getenv('DB_USER')
-        db_password = os.getenv('DB_PASSWORD')
-        db_host = os.getenv('DB_HOST')
-        db_port = os.getenv('DB_PORT')
-        db_name = os.getenv('DB_NAME')
-        
-        if not all([db_user, db_password, db_host, db_port, db_name]):
-            raise ValueError("One or more required environment variables are missing or empty.")
-        
-        conn_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-        
-        engine = create_engine(
-            conn_string,
-            pool_size=5,
-            max_overflow=10,
-            pool_timeout=30,
-            pool_pre_ping=True
-        )
-        
-        return engine  
-    
-    except Exception as e:
-        st.error(f"Database connection error: {str(e)}")
-        return None  
-
-      
-# Cache database queries
-@st.cache_data
-def fetch_data(_engine, query, column_name=None, params=None):
-    try:
-        df = pd.read_sql(query, _engine, params=params)
-        if column_name:
-            return df[column_name].tolist()
-        return df
-    except Exception as e:
-        st.error(f"Error executing query: {str(e)}")
-        return []
-
-# Cache location data
-@st.cache_data
-def fetch_location_data(_engine, state=None, district=None, is_hometown=False):
-    try:
-        if state and district:
-            query = f'''SELECT DISTINCT "city_category" 
-                       FROM intermediate."location_mapping" 
-                       WHERE "state_union_territory" = '{state}'
-                       AND "district" = '{district}'
-                       ORDER BY "city_category"'''
-        elif state:
-            query = f'''SELECT DISTINCT "district"     
-                       FROM intermediate."location_mapping" 
-                       WHERE "state_union_territory" = '{state}'
-                       ORDER BY "district"'''
-        else:
-            query = f'''SELECT DISTINCT "state_union_territory" 
-                       FROM intermediate."location_mapping" 
-                       WHERE "country" = 'India' 
-                       ORDER BY "state_union_territory"'''
-        
-        return fetch_data(_engine, query, "city_category" if state and district else "district" if state else "state_union_territory")
-    except Exception as e:
-        st.error(f"Error fetching location data: {str(e)}")
-        return []
-
-
-def validate_character_count(text, min_chars=50, max_chars=1_000_000):
-    char_count = len(text.strip())
-    
-    if char_count < min_chars:
-        return False, f"Minimum {min_chars} characters required. Currently: {char_count}"
-    if char_count > max_chars:
-        return False, f"Maximum {max_chars} characters exceeded. Currently: {char_count}"
-    
-    return True, "Valid input"
-
-# Email validation and suggestion functions
-def get_email_suggestion(email):
-    common_domains = {
-        'g': 'gmail.com',
-        'y': 'yahoo.com',
-        'o': 'outlook.com'
-    }
-    
-    try:
-        user, domain = email.split('@')
-        first_char = domain[0].lower()
-        
-        if first_char in common_domains and domain != common_domains[first_char]:
-            return f"{user}@{common_domains[first_char]}"
-    except:
-        pass
-    return None
-
-def validate_email(email):
-    pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
-    if not re.match(pattern, email):
-        return False, "Invalid email format"
-
-    common_typos = {
-        "gamil.com": "gmail.com",
-        "gnail.com": "gmail.com",
-        "gmial.com": "gmail.com",
-        "yaho.com": "yahoo.com",
-        "outlok.com": "outlook.com"
-    }
-
-    try:
-        user, domain = email.split("@")
-    except ValueError:
-        return False, "Invalid email format"
-
-    if domain.lower() in common_typos:
-        suggestion = f"{user}@{common_typos[domain.lower()]}"
-        return False, f"Did you mean {suggestion}?"
-
-    valid_tlds = ('.com', '.org', '.net', '.edu', '.gov', '.io', '.in')
-    if not domain.endswith(valid_tlds):
-        return False, "Invalid email domain"
-
-    try:
-        engine = get_db_connection()
-        if not engine:
-            return False, "Could not connect to the database"
-
-        with engine.connect() as conn:
-            query = text('SELECT "Email" FROM raw.general_information_sheet WHERE LOWER("Email") = LOWER(:Email)')
-            result = conn.execute(query, {"Email": email})
-            row = result.fetchone()
-
-            if row:
-                return False, "You’ve already registered."
-    except Exception as e:
-        return False, f"Database error while checking email: {str(e)}"
-
-    return True, ""
-
-def validate_phone(phone):
-    if not phone:
-        return False, "Phone number is required"
-    
-    # Remove any spaces or special characters
-    phone = re.sub(r'[^0-9]', '', phone)
-    
-    if not phone.isdigit():
-        return False, "Phone number should contain only digits"
-    
-    if len(phone) != 10:
-        return False, f"Phone number must be exactly 10 digits (you entered {len(phone)} digits)"
-    
-    if not phone.startswith(('6', '7', '8', '9')):
-        return False, "Phone number should start with 6, 7, 8, or 9"
-    
-    return True, "Valid phone number"
-
-def validate_word_count(text, min_words):
-    words = text.split()
-    if len(words) < min_words:
-        return False, f"Please enter at least {min_words} words (you entered {len(words)} words)"
-    return True, "Valid word count"
-
-def render_form_field(label, required=True):
-    """Render a consistent form field label"""
-    if required:
-        st.markdown(f"**{label}** <span style='color: red;'>*</span>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"**{label}**", unsafe_allow_html=True)
-
-
-
-def show_thank_you_page():
-    st.balloons()
-
-    st.markdown(
-         """
-        <div style="display: flex; justify-content: center;">
-            <div style="max-width: 700px; text-align: center;">
-                <h2>🎉 Welcome to She-for-STEM!</h2>
-                <p style="font-size: 18px;">
-                    Thanks for registering — you'll be enrolled soon.
-                </p>
-                <h3>👉 Start Learning:</h3>
-                <p style="font-size: 17px;">
-                    📱 <a href="https://play.google.com/store/apps/details?id=com.vigyanshaala.courses" target="_blank">Download App (Mobile)</a><br>
-                    💻 <a href="https://mytribe.vigyanshaala.com/" target="_blank">Access on Computer</a><br>
-                    🎥 <a href="https://bit.ly/VigyanShaala_App_Playlist" target="_blank">How to log in</a>
-                </p>
-                <h3>📢 WhatsApp Group Updates:</h3>
-                <p style="font-size: 17px;">
-                    You will be added to the WhatsApp group shortly. Stay tuned!
-                </p>
-                <p style="font-size: 18px;">
-                    Excited to have you onboard!<br>
-                    – Team VigyanShaala
-                </p>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-
-    
 # Main form
 def main():
-    # Display logo at the top of every page     
+    # Initialize session state with defaults
+    defaults = {
+        'page': 1,
+        'email': "",
+        'is_female': None,
+        'full_name': "",
+        'academic_year': "",
+        'current_degree': "",
+        'current_degree_id': None,
+        'selected_university': "",
+        'university_id': None,
+        'new_university_name': "",
+        'selected_college': "",
+        'college_id': None,
+        'new_college_name': "",
+        'college_country': "India",
+        'college_state': "",
+        'college_district': "",
+        'college_city_category': "",
+        'college_location_id': None,
+        'hometown_country': "India",
+        'hometown_state': "",
+        'hometown_district': "",
+        'hometown_city_category': "",
+        'hometown_location_id': None,
+        'selected_subjects': [],
+        'selected_subject_ids': [],
+        'future_sub_field': "",
+        'sub_field_id': None,
+        'whatsapp': "",
+        'dob': None,
+        'future_subject_area': "",
+        'caste_category': "",
+        'income_range': "",
+        'motivation': "",
+        'problems': "",
+        'professor_name': "",
+        'professor_phone': "",
+        'partner_organization': ""
+    }
     
-    # Initialize session state for multi-page form
-    if 'page' not in st.session_state:
-        st.session_state.page = 1
-    if 'email' not in st.session_state:
-        st.session_state.email = ""
-    if 'is_female' not in st.session_state:
-        st.session_state.is_female = None
-    if 'suggested_email' not in st.session_state:
-        st.session_state.suggested_email = None
-    if 'full_name' not in st.session_state:
-        st.session_state.full_name = ""
-    if 'academic_year' not in st.session_state:
-        st.session_state.academic_year = None
-    if 'current_degree' not in st.session_state:
-        st.session_state.current_degree = None
-    if 'selected_university' not in st.session_state:
-        st.session_state.selected_university = None
-    if 'new_university_name' not in st.session_state:
-        st.session_state.new_university_name = None
-    if 'selected_college' not in st.session_state:
-        st.session_state.selected_college = None
-    if 'new_college_name' not in st.session_state:
-        st.session_state.new_college_name = None
-    if 'college_state' not in st.session_state:
-        st.session_state.college_state = None
-    if 'college_district' not in st.session_state:
-        st.session_state.college_district = None
-    if 'college_city_category' not in st.session_state:
-        st.session_state.college_city_category = None
-    if 'selected_subjects' not in st.session_state:
-        st.session_state.selected_subjects = []
-    if 'whatsapp' not in st.session_state:
-        st.session_state.whatsapp = ""
-    if 'dob' not in st.session_state:
-        st.session_state.dob = ""
-    if "future_subject_area" not in st.session_state:
-        st.session_state.future_subject_area = None
-    if "future_sub_field" not in st.session_state:
-        st.session_state.future_sub_field = None
-    if 'hometown_state' not in st.session_state:
-        st.session_state.hometown_state = None
-    if 'hometown_district' not in st.session_state:
-        st.session_state.hometown_district = None
-    if 'hometown_city_category' not in st.session_state:
-        st.session_state.hometown_city_category = None
-    if 'caste_category' not in st.session_state:
-        st.session_state.caste_category = None
-    if 'income_range' not in st.session_state:
-        st.session_state.income_range = None
-    if 'motivation' not in st.session_state:
-        st.session_state.motivation = ""
-    if 'problems' not in st.session_state:
-        st.session_state.problems = ""
-    if 'professor_name' not in st.session_state:
-        st.session_state.professor_name = ""
-    if 'professor_phone' not in st.session_state:
-        st.session_state.professor_phone = ""
-    if 'partner_organization' not in st.session_state:
-        st.session_state.partner_organization = None    
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value        
 
     if st.session_state.page == "thank_you":
         show_thank_you_page()
@@ -329,18 +94,6 @@ def main():
         if email:
             is_valid, message = validate_email(email)
 
-            if not is_valid:
-                if message == "already_registered":
-                    st.markdown(
-                        "<div style='background-color:#fff3cd; color:#856404; padding:10px; border-radius:5px; font-weight:bold;'>"
-                        "Already registered!!! Log in, try another email, or contact support (+918983835993)."
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.error(message)
-  
-
         
         render_form_field("Are you a Woman/Female?")
         gender = st.radio("", ["Yes", "No"], index=0 if st.session_state.is_female is None else (0 if st.session_state.is_female else 1), label_visibility="collapsed")
@@ -360,40 +113,25 @@ def main():
                     st.rerun()
 
         # About Us Section
-        st.markdown("""
-        #### About Us
-                    
-        At VigyanShaala, we believe everyone should have the opportunity to create a better world through science. 
-        That's why our mission at VigyanShaala is to enable the innovators of tomorrow to achieve their dreams by bringing science, 
-        technology, and learning to their doorstep today. We are determined to create equity in STEM education and opportunities 
-        for the most marginalised across India. Through carefully developed ecosystems, we can eradicate inequalities and help 
-        even the most marginalized-- those who must innovate to survive - to thrive in STEM careers.
-                    
-        #### What is She for STEM
-        Incubated and launched between lockdowns by Prof. Ashutosh Kumar Sharma, then Secretary, DST., Program She for STEM(Kalpana) 
-        is an online mentoring-career coaching fellowship designed to successfully place every fellow on a high confidence STEM path. 
-        With a strong emphasis on the elements of Individual Development Plan, Self-Efficacy strengthening and 
-        Research Grade Experimental Projects, over the last two years we have continuously evolved the program structure with 
-        active partnership of our mentees themselves. These experiences and skills equip our fellows for marching into a high confidence 
-        trajectory towards scientific jobs or higher studies in STEM at leading global and national universities.
-
-        #### Who is it for
-        The program is open to all enthusiastic and aspiring Female Undergraduates and postgraduates in Science, Technology, Engineering 
-        and Math (STEM).The three key pillars we look for in a She for STEM Fellow are ACT - Ambition, Commitment and Talent.
-
-        The first cohort of 'She for STEM' was launched by Honorable Governor of Uttarakhand (Retd.) Lt. General Gurmit Singh on 10th August 2024.
-                    
-        """)
+        show_about_us()
 
     # Page 2: Gender Check and College/Academic Information
     elif st.session_state.page == 2:
         if not st.session_state.is_female:
             st.info("Kalpana Program is only for women in STEM. We will soon have something for MEN in STEM soon. Keep checking the website and app.")
             st.error("We are very sorry, this is only for Women who are pursuing degree in sciences, and in the STEM fields.")
-        else:
-            if st.button("← Back"):
+            
+            # Add back button for non-eligible users
+            if st.button("← Back to Registration"):
                 st.session_state.page = 1
                 st.rerun()
+        else:
+            # Back button at the top
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                if st.button("← Back"):
+                    st.session_state.page = 1
+                    st.rerun()
             
             st.markdown("### College & Academic Information")
             st.write(f"Email: {st.session_state.email}")
@@ -415,9 +153,17 @@ def main():
                 placeholder="Select your current academic year",
                 label_visibility="collapsed"
             )
+            
             # 3. Current Degree Level
             render_form_field("Current Degree Level")
-            degrees = fetch_data(engine, 'SELECT DISTINCT "display_name" FROM intermediate."course_mapping" ORDER BY "display_name"', "display_name")
+            degree_data = fetch_data(engine, 'SELECT DISTINCT ON ("display_name" )"display_name", "course_id" FROM vg_prod."course_mapping" ORDER BY "display_name"')
+            if degree_data.empty:
+                degrees = []
+                degree_dict = {}
+            else:
+                degrees = degree_data["display_name"].tolist()
+                degree_dict = dict(zip(degree_data["display_name"], degree_data["course_id"]))
+            
             current_degree = st.selectbox(
                 "",
                 degrees,
@@ -435,7 +181,13 @@ def main():
                 "</div>",
                 unsafe_allow_html=True
             )
-            universities = fetch_data(engine, 'SELECT DISTINCT "standard_university_names" FROM intermediate."university_mapping" ORDER BY "standard_university_names"', "standard_university_names")
+            university_data = fetch_data(engine, 'SELECT DISTINCT "university_id", "standard_university_names" FROM vg_prod."university_mapping" ORDER BY "standard_university_names"')
+            if university_data.empty:
+                universities = []
+                university_dict = {}
+            else:
+                universities = university_data["standard_university_names"].tolist()
+                university_dict = dict(zip(university_data["standard_university_names"], university_data["university_id"]))
             universities.append("Others")
 
             selected_university = st.selectbox(
@@ -457,7 +209,6 @@ def main():
                     placeholder="Enter your university name manually",
                     label_visibility="collapsed"
                 )
-            
 
             # 5. College Name
             render_form_field("College Name")
@@ -467,7 +218,13 @@ def main():
                 "</div>",
                 unsafe_allow_html=True
             )
-            colleges = fetch_data(engine, 'SELECT DISTINCT "standard_college_names" FROM intermediate."college_mapping" ORDER BY "standard_college_names"', "standard_college_names")
+            college_data = fetch_data(engine, 'SELECT DISTINCT "college_id", "standard_college_names" FROM vg_prod."college_mapping" ORDER BY "standard_college_names"')
+            if college_data.empty:
+                colleges = []
+                college_dict = {}
+            else:
+                colleges = college_data["standard_college_names"].tolist()
+                college_dict = dict(zip(college_data["standard_college_names"], college_data["college_id"]))
             colleges.append("Others")
 
             selected_college = st.selectbox(
@@ -479,7 +236,6 @@ def main():
                 label_visibility="collapsed"
             )
             
-
             # If 'Others' is selected, ask for manual input
             new_college_name = ""
             if selected_college == "Others":
@@ -490,80 +246,109 @@ def main():
                     placeholder="Enter your college name manually",
                     label_visibility="collapsed"
                 )
-            
 
-
-            # 6. College Location - State
-            render_form_field("College State/Union Territory")
-            states = fetch_location_data(engine)
-
-            college_state = st.selectbox(
+            # 6. College Location - Country
+            render_form_field("College Country")
+            college_countries, college_country_dict = fetch_location_data(engine)
+            college_country = st.selectbox(
                 "",
-                states,
-                index=states.index(st.session_state.college_state)
-                if st.session_state.college_state in states else None,
-                placeholder="Select your college state",
-                key='college_state_selector',
+                college_countries,
+                index=college_countries.index(st.session_state.college_country)
+                if st.session_state.college_country in college_countries else 0,
+                placeholder="Search or select your college country",
+                key='college_country_selector',
                 label_visibility="collapsed"
-            ) if states else None
+            ) if college_countries else None
 
-          
-            st.session_state.college_state = college_state
+            # 7. College Location - State (only for India)
+            college_state = None
+            college_district = None
+            college_city_category = None
+            if college_country == "India":
+                render_form_field("College State/Union Territory")
+                college_state_data = fetch_location_data(engine, country=college_country) if college_country else pd.DataFrame()
+                if college_state_data.empty:
+                    college_states = []
+                else:
+                    college_states = college_state_data["state_union_territory"].tolist()
 
+                college_state = st.selectbox(
+                    "",
+                    college_states,
+                    index=college_states.index(st.session_state.college_state)
+                    if st.session_state.college_state in college_states else None,
+                    placeholder="Search or select your college state",
+                    key='college_state_selector',
+                    label_visibility="collapsed"
+                ) if college_states else None
 
-            # 7. College Location - District
-            render_form_field("College District")
-            college_districts = fetch_location_data(engine, st.session_state.college_state) if st.session_state.college_state else []
+                # 8. College Location - District
+                if college_state:
+                    render_form_field("College District")
+                    college_districts = fetch_location_data(engine, college_country, college_state) if college_country and college_state else []
 
-            college_district = st.selectbox(
-                "",
-                college_districts,
-                index=college_districts.index(st.session_state.college_district)
-                if st.session_state.college_district in college_districts else None,
-                placeholder="Select your college district",
-                key='college_district_selector',
-                label_visibility="collapsed"
-            ) if college_districts else None
+                    college_district = st.selectbox(
+                        "",
+                        college_districts,
+                        index=college_districts.index(st.session_state.college_district)
+                        if st.session_state.college_district in college_districts else None,
+                        placeholder="Search or select your college district",
+                        key='college_district_selector',
+                        label_visibility="collapsed"
+                    ) if college_districts else None
 
-            st.session_state.college_district = college_district
+                # 9. College City Category
+                if college_district:
+                    render_form_field("College City Category")
+                    college_location_data = fetch_location_data(
+                        engine,
+                        college_country,
+                        college_state,
+                        college_district
+                    ) if college_country and college_state and college_district else pd.DataFrame()
 
+                    if college_location_data.empty:
+                        college_city_categories = []
+                        college_location_dict = {}
+                    else:
+                        college_city_categories = college_location_data["city_category"].tolist()
+                        college_location_dict = dict(zip(college_location_data["city_category"], college_location_data["location_id"]))
 
-            # 8. College City Category
-            render_form_field("College City Category")
-            college_city_categories = fetch_location_data(
-                engine,
-                st.session_state.college_state,
-                st.session_state.college_district
-            ) if st.session_state.college_state and st.session_state.college_district else []
+                    college_city_category = st.selectbox(
+                        "",
+                        college_city_categories,
+                        index=college_city_categories.index(st.session_state.college_city_category)
+                        if st.session_state.college_city_category in college_city_categories else None,
+                        placeholder="Select your college city category",
+                        label_visibility="collapsed"
+                    ) if college_city_categories else None
 
-
-
-            college_city_category = st.selectbox(
-                "",
-                college_city_categories,
-                index=college_city_categories.index(st.session_state.college_city_category)
-                if st.session_state.college_city_category in college_city_categories else None,
-                placeholder="Select your college city category",
-                label_visibility="collapsed"
-            ) if college_city_categories else None
-
-
-
-            # 9. Primary Subject Areasgit commit -m "review_for_final_registration_ui"
+            # 10. Currently Pursuing Subject Areas
             render_form_field("Currently Pursuing Subject Areas")
-            subject_areas = fetch_data(engine, 'SELECT DISTINCT "sub_field" FROM intermediate."subject_mapping" ORDER BY "sub_field"', "sub_field")
-            
-            # Filter out any invalid default values
-            valid_defaults = [subject for subject in st.session_state.selected_subjects if subject in subject_areas]
-            
+            subject_data = fetch_data(
+                engine,
+                '''
+                SELECT DISTINCT ON ("sub_field") "sub_field", "id"
+                FROM vg_prod."subject_mapping"
+                ORDER BY "sub_field", "id"
+                ''',
+                None
+            )
+            if subject_data.empty:
+                subjects = []
+                subject_dict = {}
+            else:
+                subjects = subject_data["sub_field"].tolist()
+                subject_dict = dict(zip(subject_data["sub_field"], subject_data["id"]))
+
             selected_subjects = st.multiselect(
-                label="",
-                options=subject_areas,
-                default=valid_defaults,
+                "",
+                subjects,
+                default=st.session_state.selected_subjects,
                 max_selections=4,
                 placeholder="Search and select up to 4 subject areas",
                 label_visibility="collapsed"
-            )
+            ) if subjects else []
 
             # Add some spacing before the next button
             st.markdown("<br>", unsafe_allow_html=True)
@@ -575,6 +360,29 @@ def main():
                 
                 if not full_name:
                     errors.append("Please enter your full name")
+                if not academic_year:
+                    errors.append("Please select your academic year")
+                if not current_degree:
+                    errors.append("Please select your current degree level")
+                if not selected_university:
+                    errors.append("Please select your university")
+                if selected_university == "Others" and not new_university_name:
+                    errors.append("Please enter your university name")
+                if not selected_college:
+                    errors.append("Please select your college")
+                if selected_college == "Others" and not new_college_name:
+                    errors.append("Please enter your college name")
+                if not college_country:
+                    errors.append("Please select your college country")
+                if college_country == "India":
+                    if not college_state:
+                        errors.append("Please select your college state")
+                    if not college_district:
+                        errors.append("Please select your college district")
+                    if not college_city_category:
+                        errors.append("Please select your college city category")
+                if not selected_subjects:
+                    errors.append("Please select at least one subject area")
                 
                 if errors:
                     for error in errors:
@@ -584,23 +392,31 @@ def main():
                     st.session_state.full_name = full_name
                     st.session_state.academic_year = academic_year
                     st.session_state.current_degree = current_degree
+                    st.session_state.current_degree_id = degree_dict.get(current_degree) if current_degree else None
                     st.session_state.selected_university = selected_university
+                    st.session_state.university_id = university_dict.get(selected_university) if selected_university != "Others" else None
                     st.session_state.new_university_name = new_university_name
                     st.session_state.selected_college = selected_college
+                    st.session_state.college_id = college_dict.get(selected_college) if selected_college != "Others" else None
                     st.session_state.new_college_name = new_college_name
+                    st.session_state.college_country = college_country
                     st.session_state.college_state = college_state
                     st.session_state.college_district = college_district
                     st.session_state.college_city_category = college_city_category
+                    st.session_state.college_location_id = college_location_dict.get(college_city_category) if college_city_category else college_country_dict.get(college_country)
                     st.session_state.selected_subjects = selected_subjects
+                    st.session_state.selected_subject_ids = [subject_dict.get(subject) for subject in selected_subjects if subject in subject_dict]
                     st.session_state.page = 3
-                    st.rerun()  
+                    st.rerun()
 
-    # Page 3: Personal Information
+# Page 3: Personal Information
     elif st.session_state.page == 3:
-        # Add back button at the top
-        if st.button("← Back"):
-            st.session_state.page = 2
-            st.rerun()
+        # Back button at the top
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("← Back"):
+                st.session_state.page = 2
+                st.rerun()
         
         st.markdown("### Personal Information")
         st.write(f"Email: {st.session_state.email}")
@@ -638,7 +454,7 @@ def main():
         future_subject_areas = fetch_data(
             engine,
             '''SELECT DISTINCT "subject_area"
-            FROM intermediate."subject_mapping"
+            FROM vg_prod."subject_mapping"
             ORDER BY "subject_area"''',
             "subject_area"
         )
@@ -657,90 +473,141 @@ def main():
         st.session_state.future_subject_area = future_subject_area
 
 
-        # 2b. Future Sub‑field
+# 2b. Future Sub-field
         render_form_field("Which sub-field do you want to pursue in it?")
-
-        future_sub_fields = fetch_data(
+        sub_field_data = fetch_data(
             engine,
-            f'''SELECT DISTINCT "sub_field"
-                FROM intermediate."subject_mapping"
+            f'''SELECT DISTINCT "sub_field", "id"
+                FROM vg_prod."subject_mapping"
                 WHERE "subject_area" = '{st.session_state.get("future_subject_area", "")}'
                 ORDER BY "sub_field"''',
-            "sub_field"
-        ) if st.session_state.get("future_subject_area") else []
+            None
+        ) if st.session_state.get("future_subject_area") else pd.DataFrame()
+
+        if sub_field_data.empty:
+            future_sub_fields = []
+            sub_field_dict = {}
+        else:
+            future_sub_fields = sub_field_data["sub_field"].tolist()
+            sub_field_dict = dict(zip(sub_field_data["sub_field"], sub_field_data["id"]))
+
+        def update_future_sub_field():
+            """Callback to update session state when sub-field is selected."""
+            selected = st.session_state.get("future_sub_field_selector")
+            st.session_state.future_sub_field = selected
+            st.session_state.sub_field_id = sub_field_dict.get(selected) if selected else None
 
         future_sub_field = st.selectbox(
             "",
             future_sub_fields,
-            index=future_sub_fields.index(st.session_state.future_sub_field)
-            if st.session_state.future_sub_field in future_sub_fields else None,
+            index=(
+                future_sub_fields.index(st.session_state.future_sub_field)
+                if st.session_state.future_sub_field in future_sub_fields else None
+            ),
             placeholder="Search or select sub-field",
             key="future_sub_field_selector",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            on_change=update_future_sub_field
         ) if future_sub_fields else None
 
-        st.session_state.future_sub_field = future_sub_field
+        # Fallback update if callback isn't triggered
+        if future_sub_field != st.session_state.future_sub_field:
+            st.session_state.future_sub_field = future_sub_field
+            st.session_state.sub_field_id = sub_field_dict.get(future_sub_field) if future_sub_field else None
 
-        # 3. Hometown/Origin - State
-        render_form_field("Hometown State/Union Territory")
-        hometown_states = fetch_location_data(engine, is_hometown=True)
-
-        hometown_state = st.selectbox(
+        # 3. Hometown/Origin - Country
+        render_form_field("Hometown Country")
+        hometown_countries, hometown_country_dict = fetch_location_data(engine)
+        hometown_country = st.selectbox(
             "",
-            hometown_states,
-            index=(
-                hometown_states.index(st.session_state.hometown_state)
-                if st.session_state.hometown_state in hometown_states else None
-            ),
-            placeholder="Search or select your hometown state",
-            key='hometown_state_selector',
-            on_change=lambda: setattr(st.session_state, 'hometown_district', None),
+            hometown_countries,
+            index=hometown_countries.index(st.session_state.hometown_country)
+            if st.session_state.hometown_country in hometown_countries else 0,
+            placeholder="Search or select your hometown country",
+            key='hometown_country_selector',
             label_visibility="collapsed"
-        ) if hometown_states else None
+        ) if hometown_countries else None
+        st.session_state.hometown_country = hometown_country
+        st.session_state.hometown_location_id = hometown_country_dict.get(hometown_country) if hometown_country else None
 
- 
+        # 4. Hometown/Origin - State (only for India)
+        hometown_state = None
+        hometown_district = None
+        hometown_city_category = None
+        if hometown_country == "India":
+            render_form_field("Hometown State/Union Territory")
+            hometown_state_data = fetch_location_data(engine, country=st.session_state.hometown_country) if st.session_state.hometown_country else pd.DataFrame()
+            if hometown_state_data.empty:
+                hometown_states = []
+            else:
+                hometown_states = hometown_state_data["state_union_territory"].tolist()
+
+            hometown_state = st.selectbox(
+                "",
+                hometown_states,
+                index=(
+                    hometown_states.index(st.session_state.hometown_state)
+                    if st.session_state.hometown_state in hometown_states else None
+                ),
+                placeholder="Search or select your hometown state",
+                key='hometown_state_selector',
+                on_change=lambda: setattr(st.session_state, 'hometown_district', None),
+                label_visibility="collapsed"
+            ) if hometown_states else None
+            st.session_state.hometown_state = hometown_state
+
+            # 5. Hometown/Origin - District
+            if hometown_state:
+                render_form_field("Hometown District")
+                hometown_districts = fetch_location_data(engine, st.session_state.hometown_country, st.session_state.hometown_state) if st.session_state.hometown_country and st.session_state.hometown_state else []
+
+                hometown_district = st.selectbox(
+                    "",
+                    hometown_districts,
+                    index=(
+                        hometown_districts.index(st.session_state.hometown_district)
+                        if st.session_state.hometown_district in hometown_districts else None
+                    ),
+                    key='hometown_district_selector',
+                    placeholder="Search or select your hometown district",
+                    label_visibility="collapsed"
+                ) if hometown_districts else None
+                st.session_state.hometown_district = hometown_district
+
+            # 6. Hometown City Category
+            if hometown_district:
+                render_form_field("Hometown City Category")
+                hometown_location_data = fetch_location_data(
+                    engine,
+                    st.session_state.hometown_country,
+                    st.session_state.hometown_state,
+                    st.session_state.hometown_district
+                ) if st.session_state.hometown_country and st.session_state.hometown_state and st.session_state.hometown_district else pd.DataFrame()
+
+                if hometown_location_data.empty:
+                    hometown_city_categories = []
+                    hometown_location_dict = {}
+                else:
+                    hometown_city_categories = hometown_location_data["city_category"].tolist()
+                    hometown_location_dict = dict(zip(hometown_location_data["city_category"], hometown_location_data["location_id"]))
+
+                hometown_city_category = st.selectbox(
+                    "",
+                    hometown_city_categories,
+                    index=(
+                        hometown_city_categories.index(st.session_state.hometown_city_category)
+                        if st.session_state.hometown_city_category in hometown_city_categories else None
+                    ),
+                    placeholder="Select your hometown city category",
+                    label_visibility="collapsed"
+                ) if hometown_city_categories else None
+                st.session_state.hometown_city_category = hometown_city_category
+                if hometown_city_category:
+                    st.session_state.hometown_location_id = hometown_location_dict.get(hometown_city_category)
+
+        # Store location data
         st.session_state.hometown_state = hometown_state
-            
-                
-
-        # 4. Hometown/Origin - District
-        render_form_field("Hometown District")
-        hometown_districts = fetch_location_data(engine, st.session_state.hometown_state, is_hometown=True) if st.session_state.hometown_state else []
-
-        hometown_district = st.selectbox(
-            "",
-            hometown_districts,
-            index=(
-                hometown_districts.index(st.session_state.hometown_district)
-                if st.session_state.hometown_district in hometown_districts else None
-            ),
-            key='hometown_district_selector',
-            placeholder="Search or select your hometown district",
-            label_visibility="collapsed"
-        ) if hometown_districts else None
-
         st.session_state.hometown_district = hometown_district
-
-        # 5. Hometown City Category
-        render_form_field("Hometown City Category")
-        hometown_city_categories = fetch_location_data(
-            engine,
-            st.session_state.hometown_state,
-            st.session_state.hometown_district,
-            is_hometown=True
-        ) if st.session_state.hometown_state and st.session_state.hometown_district else []
-
-        hometown_city_category = st.selectbox(
-            "",
-            hometown_city_categories,
-            index=(
-                hometown_city_categories.index(st.session_state.hometown_city_category)
-                if st.session_state.hometown_city_category in hometown_city_categories else None
-            ),
-            placeholder="Select your hometown city category",
-            label_visibility="collapsed"
-        ) if hometown_city_categories else None
-
         st.session_state.hometown_city_category = hometown_city_category
 
         # 6. Caste/Category
@@ -874,12 +741,6 @@ def main():
                 errors.append("Please select your future subject area")
             if not future_sub_field:
                 errors.append("Please select your future sub-field")
-            if not hometown_state:
-                errors.append("Please select your hometown state")
-            if not hometown_district:
-                errors.append("Please select your hometown district")
-            if not hometown_city_category:
-                errors.append("Please select your hometown city category")
             if not caste_category:
                 errors.append("Please select your caste/category")
             if not income_range:
@@ -907,48 +768,126 @@ def main():
                     st.error(error)
             else:
                 try:
-                    if engine:
-                        data = {
-                            'Email': st.session_state.email,
-                            'Gender': "Female",
-                            'Name': st.session_state.full_name,
-                            'Phone': whatsapp,
-                            'Date_of_Birth': dob.strftime("%Y-%m-%d") if dob else None,
-                            'Currently_Pursuing_Year': st.session_state.academic_year,
-                            'Currently_Pursuing_Degree': st.session_state.current_degree,
-                            'University': st.session_state.selected_university,
-                            'new_university_name': st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
-                            'Country': "India",
-                            'Name_of_College_University': st.session_state.selected_college,
-                            'New_College_Name': st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
-                            'College_State_Union_Territory': st.session_state.college_state,
-                            'College_District': st.session_state.college_district,
-                            'College_City_Category': st.session_state.college_city_category,
-                            'Subject_Area': ', '.join(st.session_state.selected_subjects),
-                            'Interest_Subject_Area': future_subject_area,
-                            'Interest_Sub_Field': future_sub_field,
-                            'State_Union_Territory': hometown_state,
-                            'District': hometown_district,
-                            'City_Category': hometown_city_category,
-                            'Caste_Category': caste_category,
-                            'Annual_Family_Income': income_range,
-                            'Motivation': motivation,
-                            'Problems': problems,
-                            'Professor_Name': professor_name,
-                            'Professor_Phone_Number': professor_phone,
-                            'partner_organization': partner_organization,
-                            'Submission_Timestamp': submission_timestamp
-                        }
+                    with engine.connect() as conn:
+                        with conn.begin():  # Start a transaction
+                            # Split full_name into first_name and last_name (simple split on first space)
+                            full_name = st.session_state.full_name or ""
+                            name_parts = full_name.strip().split(" ", 1)
 
-                        df = pd.DataFrame([data])
-                        df.to_sql('general_information_sheet', engine, schema='raw', if_exists='append', index=False)
+                            first_name = name_parts[0] if name_parts else ""
+                            last_name = name_parts[1] if len(name_parts) > 1 else ""
 
+                            # Insert into raw.student
+                            student_data = {
+                                "email": st.session_state.email,
+                                "first_name": first_name,
+                                "last_name": last_name,
+                                "gender": "F", 
+                                "phone": whatsapp,
+                                'date_of_birth': dob.strftime("%Y-%m-%d") if dob else None,
+                                "caste": st.session_state.caste_category,
+                                "annual_family_income_inr": st.session_state.income_range,
+                                "location_id": st.session_state.hometown_location_id  
+                                                      }
+                            student_df = pd.DataFrame([student_data])
+                            student_df.to_sql('student_details', engine, schema='vg_prod', if_exists='append', index=False)
+                   
+
+                            # Retrieve the generated student_id
+                            result = conn.execute(
+                                text("SELECT id FROM vg_prod.student_details WHERE email = :email"),
+                                {"email": st.session_state.email}
+                            )
+                            student_id = result.fetchone()[0]
+
+                            # Prepare form_details for student_registration
+                            form_json = {
+                                "motivation": st.session_state.motivation,
+                                "problems": st.session_state.problems,
+                                'partner_organization': partner_organization,
+                                "new_university_name": st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
+                                "New_College_Name": st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
+                                "Currently_Pursuing_Year": st.session_state.academic_year,
+                                "Currently_Pursuing_Degree": st.session_state.current_degree
+                        
+                            }
+
+                            # Insert into vg_prod.student_registration
+                            if not insert_student_registration(
+                                conn,
+                                student_id=student_id,
+                                form_details=form_json,
+                                submission_timestamp=submission_timestamp
+                            ):
+                                raise Exception("Failed to insert into student_registration")
+
+
+                            # Insert into raw.referral_college_professor
+                            if not insert_referral_college_professor(
+                                conn,
+                                student_id=student_id,
+                                college_id=st.session_state.college_id if st.session_state.selected_college != "Others" else None,
+                                name=professor_name,
+                                phone=professor_phone
+                            ):
+                                raise Exception("Failed to insert into referral_college_professor") 
+
+
+                            # Insert into vg_prod.student_education
+                            if not insert_student_education(
+                                conn,
+                                student_id=student_id,
+                                education_course_id=st.session_state.current_degree_id,
+                                subject_id=st.session_state.selected_subject_ids,  # Pass the list directly
+                                interest_subject_id=st.session_state.sub_field_id,
+                                college_id=st.session_state.college_id if st.session_state.selected_college != "Others" else None,
+                                university_id=st.session_state.university_id if st.session_state.selected_university != "Others" else None,
+                                college_location_id=st.session_state.college_location_id
+                            ):
+                                raise Exception("Failed to insert into student_education")
+
+
+                        # Commit transaction (handled by conn.begin())
                         st.session_state.page = "thank_you"
                         st.rerun()
-                    else:
-                        st.error("Could not connect to database")
                 except Exception as e:
                     st.error(f"Error saving data: {str(e)}")
 
+# ... (rest of the main() function remains unchanged)
+
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
