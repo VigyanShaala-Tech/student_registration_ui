@@ -7,6 +7,7 @@ import json
 from typing import Union
 import re
 import datetime
+from pytz import timezone
 from modules.page_config import setup_she_for_stem_page
 from modules.validation import validate_email, get_email_suggestion, validate_phone, validate_character_count, render_form_field
 from modules.thankyou import show_thank_you_page
@@ -80,7 +81,7 @@ def main():
         # Email input with validation
         render_form_field("Email Address")
         email = st.text_input("", value=st.session_state.email, placeholder="Enter your email address", label_visibility="collapsed")
-        
+
         # Check for email suggestions on every input
         if '@' in email:
             suggestion = get_email_suggestion(email)
@@ -89,11 +90,12 @@ def main():
                 if st.button(f"Did you mean {suggestion}?"):
                     st.session_state.email = suggestion
                     st.rerun()
-        
-        # Validate email
+
+        # Validate email immediately when user types
         if email:
             is_valid, message = validate_email(email)
-
+            if not is_valid:
+                st.error(message) 
         
         render_form_field("Are you a Woman/Female?")
         gender = st.radio("", ["Yes", "No"], index=0 if st.session_state.is_female is None else (0 if st.session_state.is_female else 1), label_visibility="collapsed")
@@ -142,21 +144,35 @@ def main():
             # 1. Full Name
             render_form_field("Full Name")
             full_name = st.text_input("", value=st.session_state.full_name, placeholder="Enter your full name", label_visibility="collapsed")
+            # Auto-save to session state
+            st.session_state.full_name = full_name
             
             # 2. Current Academic Year
             render_form_field("Current Academic Year")
             academic_year = st.selectbox(
                 "",
-                ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-                index=["1st Year", "2nd Year", "3rd Year", "4th Year"].index(st.session_state.academic_year)
+                ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"],
+                index=["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"].index(st.session_state.academic_year)
                 if st.session_state.academic_year else None,
                 placeholder="Select your current academic year",
                 label_visibility="collapsed"
             )
+            # Auto-save to session state
+            st.session_state.academic_year = academic_year
             
             # 3. Current Degree Level
             render_form_field("Current Degree Level")
-            degree_data = fetch_data(engine, 'SELECT DISTINCT ON ("display_name" )"display_name", "course_id" FROM vg_prod."course_mapping" ORDER BY "display_name"')
+            degree_data = fetch_data(
+                engine,
+                '''
+                SELECT DISTINCT ON ("display_name")
+                    "display_name", "course_id", course_duration
+                FROM intermediate."course_mapping"
+                WHERE course_duration != 1
+                ORDER BY "display_name"
+                '''
+            )
+        
             if degree_data.empty:
                 degrees = []
                 degree_dict = {}
@@ -173,6 +189,13 @@ def main():
                 label_visibility="collapsed"
             ) if degrees else None
 
+            # Auto-save to session state
+            st.session_state.current_degree = current_degree
+            st.session_state.current_degree_id = degree_dict.get(current_degree) if current_degree else None
+
+            # Add this line right after fetching degree_data:
+            st.session_state.degree_data = degree_data
+
             # 4. University Name
             render_form_field("University Name")
             st.markdown(
@@ -181,7 +204,7 @@ def main():
                 "</div>",
                 unsafe_allow_html=True
             )
-            university_data = fetch_data(engine, 'SELECT DISTINCT "university_id", "standard_university_names" FROM vg_prod."university_mapping" ORDER BY "standard_university_names"')
+            university_data = fetch_data(engine, 'SELECT DISTINCT "university_id", "standard_university_names" FROM intermediate."university_mapping" ORDER BY "standard_university_names"')
             if university_data.empty:
                 universities = []
                 university_dict = {}
@@ -198,6 +221,9 @@ def main():
                 placeholder="Search or select your university",
                 label_visibility="collapsed"
             )
+            # Auto-save to session state
+            st.session_state.selected_university = selected_university
+            st.session_state.university_id = university_dict.get(selected_university) if selected_university != "Others" else None
 
             # If 'Others' is selected, ask for manual input
             new_university_name = ""
@@ -209,6 +235,8 @@ def main():
                     placeholder="Enter your university name manually",
                     label_visibility="collapsed"
                 )
+                # Auto-save to session state
+                st.session_state.new_university_name = new_university_name
 
             # 5. College Name
             render_form_field("College Name")
@@ -218,7 +246,7 @@ def main():
                 "</div>",
                 unsafe_allow_html=True
             )
-            college_data = fetch_data(engine, 'SELECT DISTINCT "college_id", "standard_college_names" FROM vg_prod."college_mapping" ORDER BY "standard_college_names"')
+            college_data = fetch_data(engine, 'SELECT DISTINCT "college_id", "standard_college_names" FROM intermediate."college_mapping" ORDER BY "standard_college_names"')
             if college_data.empty:
                 colleges = []
                 college_dict = {}
@@ -235,6 +263,9 @@ def main():
                 placeholder="Search or select your college",
                 label_visibility="collapsed"
             )
+            # Auto-save to session state
+            st.session_state.selected_college = selected_college
+            st.session_state.college_id = college_dict.get(selected_college) if selected_college != "Others" else None
             
             # If 'Others' is selected, ask for manual input
             new_college_name = ""
@@ -246,6 +277,8 @@ def main():
                     placeholder="Enter your college name manually",
                     label_visibility="collapsed"
                 )
+                # Auto-save to session state
+                st.session_state.new_college_name = new_college_name
 
             # 6. College Location - Country
             render_form_field("College Country")
@@ -323,13 +356,14 @@ def main():
                         label_visibility="collapsed"
                     ) if college_city_categories else None
 
+
             # 10. Currently Pursuing Subject Areas
             render_form_field("Currently Pursuing Subject Areas")
             subject_data = fetch_data(
                 engine,
                 '''
                 SELECT DISTINCT ON ("sub_field") "sub_field", "id"
-                FROM vg_prod."subject_mapping"
+                FROM intermediate."subject_mapping"
                 ORDER BY "sub_field", "id"
                 ''',
                 None
@@ -349,6 +383,7 @@ def main():
                 placeholder="Search and select up to 4 subject areas",
                 label_visibility="collapsed"
             ) if subjects else []
+
 
             # Add some spacing before the next button
             st.markdown("<br>", unsafe_allow_html=True)
@@ -388,17 +423,7 @@ def main():
                     for error in errors:
                         st.error(error)
                 else:
-                    # Store page 2 data in session state
-                    st.session_state.full_name = full_name
-                    st.session_state.academic_year = academic_year
-                    st.session_state.current_degree = current_degree
-                    st.session_state.current_degree_id = degree_dict.get(current_degree) if current_degree else None
-                    st.session_state.selected_university = selected_university
-                    st.session_state.university_id = university_dict.get(selected_university) if selected_university != "Others" else None
-                    st.session_state.new_university_name = new_university_name
-                    st.session_state.selected_college = selected_college
-                    st.session_state.college_id = college_dict.get(selected_college) if selected_college != "Others" else None
-                    st.session_state.new_college_name = new_college_name
+                    # Data is already saved in session state above, just move to next page
                     st.session_state.college_country = college_country
                     st.session_state.college_state = college_state
                     st.session_state.college_district = college_district
@@ -454,7 +479,7 @@ def main():
         future_subject_areas = fetch_data(
             engine,
             '''SELECT DISTINCT "subject_area"
-            FROM vg_prod."subject_mapping"
+            FROM intermediate."subject_mapping"
             ORDER BY "subject_area"''',
             "subject_area"
         )
@@ -478,7 +503,7 @@ def main():
         sub_field_data = fetch_data(
             engine,
             f'''SELECT DISTINCT "sub_field", "id"
-                FROM vg_prod."subject_mapping"
+                FROM intermediate."subject_mapping"
                 WHERE "subject_area" = '{st.session_state.get("future_subject_area", "")}'
                 ORDER BY "sub_field"''',
             None
@@ -729,7 +754,9 @@ def main():
   
 
         if st.button("Submit Registration", type="primary"):
-            submission_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            ist = timezone('Asia/Kolkata')
+            submission_timestamp = datetime.datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
             errors = []
 
             is_valid, message = validate_phone(whatsapp)
@@ -774,12 +801,12 @@ def main():
                             full_name = st.session_state.full_name or ""
                             name_parts = full_name.strip().split(" ", 1)
 
-                            first_name = name_parts[0] if name_parts else ""
-                            last_name = name_parts[1] if len(name_parts) > 1 else ""
+                            first_name = name_parts[0].capitalize() if name_parts else ""
+                            last_name = name_parts[1].capitalize() if len(name_parts) > 1 else ""
 
                             # Insert into raw.student
                             student_data = {
-                                "email": st.session_state.email,
+                                "email": st.session_state.email.lower(),
                                 "first_name": first_name,
                                 "last_name": last_name,
                                 "gender": "F", 
@@ -790,12 +817,12 @@ def main():
                                 "location_id": st.session_state.hometown_location_id  
                                                       }
                             student_df = pd.DataFrame([student_data])
-                            student_df.to_sql('student_details', engine, schema='vg_prod', if_exists='append', index=False)
+                            student_df.to_sql('student_details', engine, schema='intermediate', if_exists='append', index=False)
                    
 
                             # Retrieve the generated student_id
                             result = conn.execute(
-                                text("SELECT id FROM vg_prod.student_details WHERE email = :email"),
+                                text("SELECT id FROM intermediate.student_details WHERE email = :email"),
                                 {"email": st.session_state.email}
                             )
                             student_id = result.fetchone()[0]
@@ -808,11 +835,10 @@ def main():
                                 "new_university_name": st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
                                 "New_College_Name": st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
                                 "Currently_Pursuing_Year": st.session_state.academic_year,
-                                "Currently_Pursuing_Degree": st.session_state.current_degree
                         
                             }
 
-                            # Insert into vg_prod.student_registration
+                            # Insert into intermediate.student_registration
                             if not insert_student_registration(
                                 conn,
                                 student_id=student_id,
@@ -833,18 +859,27 @@ def main():
                                 raise Exception("Failed to insert into referral_college_professor") 
 
 
-                            # Insert into vg_prod.student_education
+                            # Retrieve course_duration from degree_data
+                            course_duration = None
+                            if st.session_state.current_degree_id and not st.session_state.degree_data.empty:
+                                matching_rows = st.session_state.degree_data[st.session_state.degree_data["course_id"] == st.session_state.current_degree_id]
+                                if not matching_rows.empty:
+                                    course_duration = int(matching_rows["course_duration"].iloc[0])
+                                                        # Insert into intermediate.student_education
                             if not insert_student_education(
                                 conn,
                                 student_id=student_id,
                                 education_course_id=st.session_state.current_degree_id,
-                                subject_id=st.session_state.selected_subject_ids,  # Pass the list directly
+                                subject_id=st.session_state.selected_subject_ids,
                                 interest_subject_id=st.session_state.sub_field_id,
                                 college_id=st.session_state.college_id if st.session_state.selected_college != "Others" else None,
                                 university_id=st.session_state.university_id if st.session_state.selected_university != "Others" else None,
-                                college_location_id=st.session_state.college_location_id
+                                college_location_id=st.session_state.college_location_id,
+                                academic_year=st.session_state.academic_year,
+                                course_duration=course_duration
                             ):
                                 raise Exception("Failed to insert into student_education")
+
 
 
                         # Commit transaction (handled by conn.begin())

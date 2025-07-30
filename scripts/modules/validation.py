@@ -59,13 +59,17 @@ def validate_email(email):
     if not domain.endswith(valid_tlds):
         return False, "Invalid email domain"
 
+    # Bypass database check for vstest@gmail.com
+    if email.lower() == "vstest@gmail.com":
+        return True, ""
+
     try:
         engine = get_db_connection()
         if not engine:
             return False, "Could not connect to the database"
 
         with engine.connect() as conn:
-            query = text('SELECT "email" FROM vg_prod.student_details WHERE LOWER("email") = LOWER(:email)')
+            query = text('SELECT "email" FROM intermediate.student_details WHERE LOWER("email") = LOWER(:email)')
             result = conn.execute(query, {"email": email})
             row = result.fetchone()
 
