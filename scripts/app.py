@@ -664,7 +664,7 @@ def main():
         st.session_state.income_range = income_range
 
         # 8. Motivation
-        render_form_field("Why are you applying for this program?")
+        render_form_field("Why are you applying for this program? (Optional)", required=False)
         motivation = st.text_area(
             "",
             value=st.session_state.get("motivation", ""),
@@ -679,7 +679,7 @@ def main():
                 st.error(message)
 
         # 9. Challenges
-        render_form_field("What challenges do you face in your studies and career?")
+        render_form_field("What challenges do you face in your studies and career? (Optional)", required=False)
         problems = st.text_area(
             "",
             value=st.session_state.get("problems", ""),
@@ -719,7 +719,7 @@ def main():
 
         st.session_state.professor_phone = professor_phone
 
-        # 12. Partner Organization (Optional)
+        # 12. Partner Organization
         render_form_field(
             "Are you associated with any of the following partner organizations or chapters?",
         )
@@ -772,15 +772,13 @@ def main():
                 errors.append("Please select your caste/category")
             if not income_range:
                 errors.append("Please select your income range")
-            if not motivation:
-                errors.append("Please enter your motivation")
-            else:
+            # Motivation is optional, but if provided, must be at least 50 characters
+            if motivation:
                 is_valid, message = validate_character_count(motivation, 50)
                 if not is_valid:
                     errors.append(f"Motivation: {message}")
-            if not problems:
-                errors.append("Please enter your challenges")
-            else:
+            # Problems/Challenges is optional, but if provided, must be at least 50 characters
+            if problems:
                 is_valid, message = validate_character_count(problems, 50)
                 if not is_valid:
                     errors.append(f"Challenges: {message}")
@@ -879,6 +877,46 @@ def main():
                                 course_duration=course_duration
                             ):
                                 raise Exception("Failed to insert into student_education")
+
+
+                        # Also dump data into general_information_sheet (for backup/log)
+                        data = {
+                        'Student_id': student_id,
+                        'Email': st.session_state.email,
+                        'Gender': "Female",
+                        'Name': st.session_state.full_name,
+                        'Phone': whatsapp,
+                        'Date_of_Birth': dob.strftime("%Y-%m-%d") if dob else None,
+                        'Currently_Pursuing_Year': st.session_state.academic_year,
+                        'Currently_Pursuing_Degree': st.session_state.current_degree,
+                        'University': st.session_state.selected_university,
+                        'new_university_name': st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
+                        'Name_of_College_University': st.session_state.selected_college,
+                        'New_College_Name': st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
+                        'college_country': st.session_state.college_country,
+                        'College_State_Union_Territory': st.session_state.get("college_state", ""),
+                        'College_District': st.session_state.get("college_district", ""),
+                        'College_City_Category': st.session_state.get("college_city_category", ""),
+                        'Subject_Area': ', '.join(st.session_state.selected_subjects),
+                        'Interest_Subject_Area': future_subject_area,
+                        'Interest_Sub_Field': future_sub_field,
+                        'Country': st.session_state.hometown_country,
+                        'State_Union_Territory': st.session_state.get("hometown_state", ""),
+                        'District': st.session_state.get("hometown_district", ""),
+                        'City_Category': st.session_state.get("hometown_city_category", ""),
+                        'Caste_Category': caste_category,
+                        'Annual_Family_Income': income_range,
+                        'Motivation': motivation,
+                        'Problems': problems,
+                        'Professor_Name': professor_name,
+                        'Professor_Phone_Number': professor_phone,
+                        'partner_organization': partner_organization,
+                        'Submission_Timestamp': submission_timestamp
+                            }
+
+                        df = pd.DataFrame([data])
+                        df.to_sql('general_information_sheet', engine, schema='raw', if_exists='append', index=False)
+
 
 
 
