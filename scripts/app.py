@@ -802,28 +802,46 @@ def main():
                             first_name = name_parts[0].capitalize() if name_parts else ""
                             last_name = name_parts[1].capitalize() if len(name_parts) > 1 else ""
 
-                            # Insert into raw.student
-                            student_data = {
-                                "email": st.session_state.email.lower(),
-                                "first_name": first_name,
-                                "last_name": last_name,
-                                "gender": "F", 
-                                "phone": whatsapp,
-                                'date_of_birth': dob.strftime("%Y-%m-%d") if dob else None,
-                                "caste": st.session_state.caste_category,
-                                "annual_family_income_inr": st.session_state.income_range,
-                                "location_id": st.session_state.hometown_location_id  
-                                                      }
-                            student_df = pd.DataFrame([student_data])
-                            student_df.to_sql('student_details', engine, schema='intermediate', if_exists='append', index=False)
-                   
-
-                            # Retrieve the generated student_id
                             result = conn.execute(
-                                text("SELECT id FROM intermediate.student_details WHERE email = :email"),
-                                {"email": st.session_state.email}
+                                text("""
+                                    INSERT INTO intermediate.student_details (
+                                        email,
+                                        first_name,
+                                        last_name,
+                                        gender,
+                                        phone,
+                                        date_of_birth,
+                                        caste,
+                                        annual_family_income_inr,
+                                        location_id
+                                    )
+                                    VALUES (
+                                        LOWER(:email),
+                                        :first_name,
+                                        :last_name,
+                                        :gender,
+                                        :phone,
+                                        :date_of_birth,
+                                        :caste,
+                                        :annual_family_income_inr,
+                                        :location_id
+                                    )
+                                    RETURNING id;
+                                """),
+                                {
+                                    "email": st.session_state.email,
+                                    "first_name": first_name,
+                                    "last_name": last_name,
+                                    "gender": "F",
+                                    "phone": whatsapp,
+                                    "date_of_birth": dob.strftime("%Y-%m-%d") if dob else None,
+                                    "caste": st.session_state.caste_category,
+                                    "annual_family_income_inr": st.session_state.income_range,
+                                    "location_id": st.session_state.hometown_location_id,
+                                }
                             )
-                            student_id = result.fetchone()[0]
+
+                            student_id = result.scalar()  # fetch the returned id safely
 
                             # Prepare form_details for student_registration
                             form_json = {
