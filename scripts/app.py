@@ -791,17 +791,60 @@ def main():
             if errors:
                 for error in errors:
                     st.error(error)
+
             else:
                 try:
+                    backup_data = {
+                        # 'Student_id':  -- intentionally omitted for the backup
+                        'Email': st.session_state.email.lower(),
+                        'Gender': "Female",
+                        'Name': st.session_state.full_name,
+                        'Phone': whatsapp,
+                        'Date_of_Birth': dob.strftime("%Y-%m-%d") if dob else None,
+                        'Currently_Pursuing_Year': st.session_state.academic_year,
+                        'Currently_Pursuing_Degree': st.session_state.current_degree,
+                        'University': st.session_state.selected_university,
+                        'new_university_name': st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
+                        'Name_of_College_University': st.session_state.selected_college,
+                        'New_College_Name': st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
+                        'college_country': st.session_state.college_country,
+                        'College_State_Union_Territory': st.session_state.get("college_state", ""),
+                        'College_District': st.session_state.get("college_district", ""),
+                        'College_City_Category': st.session_state.get("college_city_category", ""),
+                        'Subject_Area': ', '.join(st.session_state.selected_subjects),
+                        'Interest_Subject_Area': future_subject_area,
+                        'Interest_Sub_Field': future_sub_field,
+                        'Country': st.session_state.hometown_country,
+                        'State_Union_Territory': st.session_state.get("hometown_state", ""),
+                        'District': st.session_state.get("hometown_district", ""),
+                        'City_Category': st.session_state.get("hometown_city_category", ""),
+                        'Caste_Category': caste_category,
+                        'Annual_Family_Income': income_range,
+                        'Motivation': motivation,
+                        'Problems': problems,
+                        'Professor_Name': professor_name,
+                        'Professor_Phone_Number': professor_phone,
+                        'partner_organization': partner_organization,
+                        'Submission_Timestamp': submission_timestamp
+                    }
+                    # Use a separate, independent commit for the backup row
+                    df_backup = pd.DataFrame([backup_data])
+                    df_backup.to_sql('general_information_sheet', engine, schema='raw', if_exists='append', index=False)
+                    # (Optional) st.success("Basic info saved for backup.")
+                except Exception as backup_err:
+                    st.warning(f"Could not write backup row to general_information_sheet. Error: {backup_err}")
+
+
+                try:
                     with engine.connect() as conn:
-                        with conn.begin():  # Start a transaction
+                        with conn.begin():  # Start a transaction for the core inserts
                             # Split full_name into first_name and last_name (simple split on first space)
                             full_name = st.session_state.full_name or ""
                             name_parts = full_name.strip().split(" ", 1)
-
                             first_name = name_parts[0].capitalize() if name_parts else ""
                             last_name = name_parts[1].capitalize() if len(name_parts) > 1 else ""
 
+                            # Insert student_details -> RETURNING id
                             result = conn.execute(
                                 text("""
                                     INSERT INTO intermediate.student_details (
@@ -841,17 +884,26 @@ def main():
                                 }
                             )
 
-                            student_id = result.scalar()  # fetch the returned id safely
+                            # >>> Special handling: if scalar() fails, show the custom message
+                            try:
+                                student_id = result.scalar()
+                            except Exception as scalar_err:
+                                st.error(
+                                    "Your basic information has been saved. "
+                                    "We ran into an issue while generating your Student ID. "
+                                    "Please contact support at +91 8983835993 and share a screenshot of this error:\n\n"
+                                    f"{scalar_err}"
+                                )
+                                st.stop()  # halt execution so nothing else runs
 
                             # Prepare form_details for student_registration
                             form_json = {
                                 "motivation": st.session_state.motivation,
                                 "problems": st.session_state.problems,
-                                'partner_organization': partner_organization,
+                                "partner_organization": partner_organization,
                                 "new_university_name": st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
                                 "New_College_Name": st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
                                 "Currently_Pursuing_Year": st.session_state.academic_year,
-                        
                             }
 
                             # Insert into intermediate.student_registration
@@ -863,7 +915,6 @@ def main():
                             ):
                                 raise Exception("Failed to insert into student_registration")
 
-
                             # Insert into raw.referral_college_professor
                             if not insert_referral_college_professor(
                                 conn,
@@ -872,16 +923,18 @@ def main():
                                 name=professor_name,
                                 phone=professor_phone
                             ):
-                                raise Exception("Failed to insert into referral_college_professor") 
-
+                                raise Exception("Failed to insert into referral_college_professor")
 
                             # Retrieve course_duration from degree_data
                             course_duration = None
                             if st.session_state.current_degree_id and not st.session_state.degree_data.empty:
-                                matching_rows = st.session_state.degree_data[st.session_state.degree_data["course_id"] == st.session_state.current_degree_id]
+                                matching_rows = st.session_state.degree_data[
+                                    st.session_state.degree_data["course_id"] == st.session_state.current_degree_id
+                                ]
                                 if not matching_rows.empty:
                                     course_duration = int(matching_rows["course_duration"].iloc[0])
-                                                        # Insert into intermediate.student_education
+
+                            # Insert into intermediate.student_education
                             if not insert_student_education(
                                 conn,
                                 student_id=student_id,
@@ -896,55 +949,19 @@ def main():
                             ):
                                 raise Exception("Failed to insert into student_education")
 
+                    # If everything went fine:
+                    st.session_state.page = "thank_you"
+                    st.rerun()
 
-                        # Also dump data into general_information_sheet (for backup/log)
-                        data = {
-                        'Student_id': student_id,
-                        'Email': st.session_state.email,
-                        'Gender': "Female",
-                        'Name': st.session_state.full_name,
-                        'Phone': whatsapp,
-                        'Date_of_Birth': dob.strftime("%Y-%m-%d") if dob else None,
-                        'Currently_Pursuing_Year': st.session_state.academic_year,
-                        'Currently_Pursuing_Degree': st.session_state.current_degree,
-                        'University': st.session_state.selected_university,
-                        'new_university_name': st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
-                        'Name_of_College_University': st.session_state.selected_college,
-                        'New_College_Name': st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
-                        'college_country': st.session_state.college_country,
-                        'College_State_Union_Territory': st.session_state.get("college_state", ""),
-                        'College_District': st.session_state.get("college_district", ""),
-                        'College_City_Category': st.session_state.get("college_city_category", ""),
-                        'Subject_Area': ', '.join(st.session_state.selected_subjects),
-                        'Interest_Subject_Area': future_subject_area,
-                        'Interest_Sub_Field': future_sub_field,
-                        'Country': st.session_state.hometown_country,
-                        'State_Union_Territory': st.session_state.get("hometown_state", ""),
-                        'District': st.session_state.get("hometown_district", ""),
-                        'City_Category': st.session_state.get("hometown_city_category", ""),
-                        'Caste_Category': caste_category,
-                        'Annual_Family_Income': income_range,
-                        'Motivation': motivation,
-                        'Problems': problems,
-                        'Professor_Name': professor_name,
-                        'Professor_Phone_Number': professor_phone,
-                        'partner_organization': partner_organization,
-                        'Submission_Timestamp': submission_timestamp
-                            }
-
-                        df = pd.DataFrame([data])
-                        df.to_sql('general_information_sheet', engine, schema='raw', if_exists='append', index=False)
-
-
-
-
-                        # Commit transaction (handled by conn.begin())
-                        st.session_state.page = "thank_you"
-                        st.rerun()
                 except Exception as e:
-                    st.error(f"Error saving data: {str(e)}")
+                    # Generic catch-all for other failures (after the backup is already saved)
+                    st.error(
+                        "We saved your basic information, but there was an error completing your registration.\n\n"
+                        f"Error: {e}\n\n"
+                        "Please contact support at +91 8983835993 and share a screenshot of this message."
+                    )
 
-# ... (rest of the main() function remains unchanged)
+
 
 if __name__ == "__main__":
     main()
