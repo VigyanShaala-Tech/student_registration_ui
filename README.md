@@ -41,7 +41,6 @@ Additionally, data for dropdowns is dynamically fetched from **mapping tables**:
 
 ├── image/
 │ └── vslogo.png # Application logo and other images
-│
 ├── scripts/
 │ ├── app.py # Main Streamlit application
 │ ├── config.env # Environment variables and database configuration
@@ -54,5 +53,4 @@ Additionally, data for dropdowns is dynamically fetched from **mapping tables**:
 │ ├── page_config.py # Handles page title, icon, and logo setup
 │ ├── thankyou.py # Thank-you page displayed after form submission
 │ └── validation.py # Validation functions for email, phone number, word count
-│
 └── README.md # Project documentation
