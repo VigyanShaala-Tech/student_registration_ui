@@ -40,19 +40,19 @@ Additionally, data for dropdowns is dynamically fetched from **mapping tables**:
 ## 📂 Project Structure
 
 ├── image/
-│   └── vslogo.png                 # Application logo and images
+│ └── vslogo.png # Application logo and other images
 │
 ├── scripts/
-│   ├── app.py                     # Main Streamlit application
-│   ├── config.env                 # Environment variables and DB configuration
-│   ├── requirements.txt           # Python dependencies
-│   ├── run.sh                     # Application startup script
-│   └── modules/                   # Supporting modules
-│       ├── about_us.py            # Info about VigyanShaala & She For STEM initiative
-│       ├── db_connection.py       # Loads config and establishes DB connection
-│       ├── db_operation.py        # Functions to fetch and insert data into DB
-│       ├── page_config.py         # Handles page title, icon, and logo setup
-│       ├── thankyou.py            # Thank-you page displayed after form submission
-│       └── validation.py          # Validation for email, phone number, word count
+│ ├── app.py # Main Streamlit application
+│ ├── config.env # Environment variables and database configuration
+│ ├── requirements.txt # Python dependencies
+│ ├── run.sh # Application startup script
+│ └── modules/ # Supporting Python modules
+│ ├── about_us.py # Information about VigyanShaala & She For STEM initiative
+│ ├── db_connection.py # Loads config and establishes DB connection
+│ ├── db_operation.py # Functions to fetch and insert data into DB
+│ ├── page_config.py # Handles page title, icon, and logo setup
+│ ├── thankyou.py # Thank-you page displayed after form submission
+│ └── validation.py # Validation functions for email, phone number, word count
 │
-└── README.md                      # Project documentation
+└── README.md # Project documentation
