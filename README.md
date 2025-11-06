@@ -37,8 +37,6 @@ Additionally, data for dropdowns is dynamically fetched from **mapping tables**:
 
 ---
 
-## 📂 Project Structure
-
 # Project Structure
 
 The project is organized as follows:
