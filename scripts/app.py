@@ -902,8 +902,8 @@ def main():
                                 "problems": st.session_state.problems,
                                 "partner_organization": partner_organization,
                                 "new_university_name": st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
-                                "New_College_Name": st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
-                                "Currently_Pursuing_Year": st.session_state.academic_year,
+                                "new_college_name": st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
+                                "currently_pursuing_year": st.session_state.academic_year,
                             }
 
                             # Insert into intermediate.student_registration
