@@ -56,3 +56,11 @@ The project is organized as follows:
     - `thankyou.py` – Thank-you page displayed after form submission
     - `validation.py` – Validation functions for email, phone number, word count
 - `README.md` – Project documentation
+
+## Requirements
+- Python 3.10.12
+- pandas==2.3.0
+- python-dotenv==1.0.1
+- pytz==2025.2
+- SQLAlchemy==2.0.41
+- streamlit==1.46.0
