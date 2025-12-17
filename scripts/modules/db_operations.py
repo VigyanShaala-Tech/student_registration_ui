@@ -12,7 +12,7 @@ def fetch_location_data(_engine, country=None, state=None, district=None):
     try:
         if country and state and district:
             query = f'''SELECT DISTINCT "city_category", "location_id" 
-                       FROM intermediate."location_mapping" 
+                       FROM raw."location_mapping" 
                        WHERE "country" = '{country}'
                        AND "state_union_territory" = '{state}'
                        AND "district" = '{district}'
@@ -20,20 +20,20 @@ def fetch_location_data(_engine, country=None, state=None, district=None):
             return fetch_data(_engine, query)
         elif country and state:
             query = f'''SELECT DISTINCT "district"     
-                       FROM intermediate."location_mapping" 
+                       FROM raw."location_mapping" 
                        WHERE "country" = '{country}'
                        AND "state_union_territory" = '{state}'
                        ORDER BY "district"'''
             return fetch_data(_engine, query, "district")
         elif country:
             query = f'''SELECT DISTINCT ON ("state_union_territory") "state_union_territory", "location_id" 
-                       FROM intermediate."location_mapping" 
+                       FROM raw."location_mapping" 
                        WHERE "country" = '{country}' 
                        ORDER BY "state_union_territory"'''
             return fetch_data(_engine, query)
         else:
             query = f'''SELECT DISTINCT ON ("country") "country", "location_id" 
-                       FROM intermediate."location_mapping" 
+                       FROM raw."location_mapping" 
                        ORDER BY "country"'''
             country_data = fetch_data(_engine, query)
             if country_data.empty:
@@ -50,7 +50,7 @@ def fetch_location_data(_engine, country=None, state=None, district=None):
 
 
 def insert_referral_college_professor(conn, student_id, college_id, name, phone):
-    """Insert data into intermediate.referral_college_professor table if name or phone is provided."""
+    """Insert data into raw.referral_college_professor table if name or phone is provided."""
     try:
         # Validate inputs
         if student_id is None:
@@ -65,7 +65,7 @@ def insert_referral_college_professor(conn, student_id, college_id, name, phone)
         print(f"Inserting into referral_college_professor: student_id={student_id}, college_id={college_id}, name={name}, phone={phone}")
 
         query = text("""
-        INSERT INTO intermediate.referral_college_professor (student_id, college_id, name, phone)
+        INSERT INTO raw.referral_college_professor (student_id, college_id, name, phone)
         VALUES (:student_id, :college_id, :name, :phone)
         """)
         conn.execute(query, {
@@ -82,7 +82,7 @@ def insert_referral_college_professor(conn, student_id, college_id, name, phone)
         
 
 def insert_student_registration(conn, student_id: int, form_details: dict, submission_timestamp: Union[datetime.datetime, str]):
-    """Insert data into intermediate.student_registration_details table."""
+    """Insert data into raw.student_registration_details table."""
     try:
         if student_id is None:
             raise ValueError("student_id cannot be None")
@@ -90,11 +90,9 @@ def insert_student_registration(conn, student_id: int, form_details: dict, submi
             raise ValueError(f"form_details must be a dictionary, got {type(form_details)}")
         if submission_timestamp is None:
             raise ValueError("submission_timestamp cannot be None")
-
-        expected_keys = {"motivation", "problems", "new_university_name", "New_College_Name", "Currently_Pursuing_Year"}
-        missing_keys = expected_keys - form_details.keys()
-        if missing_keys:
-            raise ValueError(f"form_details missing expected keys: {missing_keys}")
+        
+        if not isinstance(form_details, dict):
+            raise ValueError("form_details must be a dictionary")
 
         if isinstance(submission_timestamp, datetime.datetime):
             formatted_timestamp = submission_timestamp.strftime("%Y-%m-%d %H:%M:%S")
@@ -105,7 +103,7 @@ def insert_student_registration(conn, student_id: int, form_details: dict, submi
             raise TypeError("submission_timestamp must be a datetime or string")
 
         query = text("""
-            INSERT INTO intermediate.student_registration_details (student_id, form_details, registration_date)
+            INSERT INTO raw.student_registration_details (student_id, form_details, registration_date)
             VALUES (:student_id, :form_details, :registration_date)
         """)
         conn.execute(query, {
@@ -121,7 +119,7 @@ def insert_student_registration(conn, student_id: int, form_details: dict, submi
 
 
 def insert_student_education(conn, student_id, education_course_id, subject_id, interest_subject_id, college_id, university_id, college_location_id, academic_year, course_duration):
-    """Insert data into intermediate.student_education table."""
+    """Insert data into raw.student_education table."""
     try:
         # Validate inputs
         if student_id is None:
@@ -175,7 +173,7 @@ def insert_student_education(conn, student_id, education_course_id, subject_id, 
 
         # Insert into database
         query = text("""
-        INSERT INTO intermediate.student_education (
+        INSERT INTO raw.student_education (
             student_id, education_course_id, subject_id, interest_subject_id, 
             college_id, university_id, college_location_id, start_year, end_year
         )

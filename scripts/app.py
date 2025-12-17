@@ -167,7 +167,7 @@ def main():
                 '''
                 SELECT DISTINCT ON ("display_name")
                     "display_name", "course_id", course_duration
-                FROM intermediate."course_mapping"
+                FROM raw."course_mapping"
                 WHERE course_duration != 1
                 ORDER BY "display_name"
                 '''
@@ -204,7 +204,7 @@ def main():
                 "</div>",
                 unsafe_allow_html=True
             )
-            university_data = fetch_data(engine, 'SELECT DISTINCT "university_id", "standard_university_names" FROM intermediate."university_mapping" ORDER BY "standard_university_names"')
+            university_data = fetch_data(engine, 'SELECT DISTINCT "university_id", "standard_university_names" FROM raw."university_mapping" ORDER BY "standard_university_names"')
             if university_data.empty:
                 universities = []
                 university_dict = {}
@@ -246,7 +246,7 @@ def main():
                 "</div>",
                 unsafe_allow_html=True
             )
-            college_data = fetch_data(engine, 'SELECT DISTINCT "college_id", "standard_college_names" FROM intermediate."college_mapping" ORDER BY "standard_college_names"')
+            college_data = fetch_data(engine, 'SELECT DISTINCT "college_id", "standard_college_names" FROM raw."college_mapping" ORDER BY "standard_college_names"')
             if college_data.empty:
                 colleges = []
                 college_dict = {}
@@ -363,7 +363,7 @@ def main():
                 engine,
                 '''
                 SELECT DISTINCT ON ("sub_field") "sub_field", "id"
-                FROM intermediate."subject_mapping"
+                FROM raw."subject_mapping"
                 ORDER BY "sub_field", "id"
                 ''',
                 None
@@ -479,7 +479,7 @@ def main():
         future_subject_areas = fetch_data(
             engine,
             '''SELECT DISTINCT "subject_area"
-            FROM intermediate."subject_mapping"
+            FROM raw."subject_mapping"
             ORDER BY "subject_area"''',
             "subject_area"
         )
@@ -503,7 +503,7 @@ def main():
         sub_field_data = fetch_data(
             engine,
             f'''SELECT DISTINCT "sub_field", "id"
-                FROM intermediate."subject_mapping"
+                FROM raw."subject_mapping"
                 WHERE "subject_area" = '{st.session_state.get("future_subject_area", "")}'
                 ORDER BY "sub_field"''',
             None
@@ -791,50 +791,7 @@ def main():
             if errors:
                 for error in errors:
                     st.error(error)
-
             else:
-                try:
-                    backup_data = {
-                        # 'Student_id':  -- intentionally omitted for the backup
-                        'Email': st.session_state.email.lower(),
-                        'Gender': "Female",
-                        'Name': st.session_state.full_name,
-                        'Phone': whatsapp,
-                        'Date_of_Birth': dob.strftime("%Y-%m-%d") if dob else None,
-                        'Currently_Pursuing_Year': st.session_state.academic_year,
-                        'Currently_Pursuing_Degree': st.session_state.current_degree,
-                        'University': st.session_state.selected_university,
-                        'new_university_name': st.session_state.new_university_name if st.session_state.selected_university == "Others" else None,
-                        'Name_of_College_University': st.session_state.selected_college,
-                        'New_College_Name': st.session_state.new_college_name if st.session_state.selected_college == "Others" else None,
-                        'college_country': st.session_state.college_country,
-                        'College_State_Union_Territory': st.session_state.get("college_state", ""),
-                        'College_District': st.session_state.get("college_district", ""),
-                        'College_City_Category': st.session_state.get("college_city_category", ""),
-                        'Subject_Area': ', '.join(st.session_state.selected_subjects),
-                        'Interest_Subject_Area': future_subject_area,
-                        'Interest_Sub_Field': future_sub_field,
-                        'Country': st.session_state.hometown_country,
-                        'State_Union_Territory': st.session_state.get("hometown_state", ""),
-                        'District': st.session_state.get("hometown_district", ""),
-                        'City_Category': st.session_state.get("hometown_city_category", ""),
-                        'Caste_Category': caste_category,
-                        'Annual_Family_Income': income_range,
-                        'Motivation': motivation,
-                        'Problems': problems,
-                        'Professor_Name': professor_name,
-                        'Professor_Phone_Number': professor_phone,
-                        'partner_organization': partner_organization,
-                        'Submission_Timestamp': submission_timestamp
-                    }
-                    # Use a separate, independent commit for the backup row
-                    df_backup = pd.DataFrame([backup_data])
-                    df_backup.to_sql('general_information_sheet', engine, schema='raw', if_exists='append', index=False)
-                    # (Optional) st.success("Basic info saved for backup.")
-                except Exception as backup_err:
-                    st.warning(f"Could not write backup row to general_information_sheet. Error: {backup_err}")
-
-
                 try:
                     with engine.connect() as conn:
                         with conn.begin():  # Start a transaction for the core inserts
@@ -844,10 +801,10 @@ def main():
                             first_name = name_parts[0].capitalize() if name_parts else ""
                             last_name = name_parts[1].capitalize() if len(name_parts) > 1 else ""
 
-                            # Insert student_details -> RETURNING id
+                            # Upsert student_details -> RETURNING id
                             result = conn.execute(
                                 text("""
-                                    INSERT INTO intermediate.student_details (
+                                    INSERT INTO raw.student_details (
                                         email,
                                         first_name,
                                         last_name,
@@ -869,6 +826,15 @@ def main():
                                         :annual_family_income_inr,
                                         :location_id
                                     )
+                                    ON CONFLICT (email)
+                                    DO UPDATE SET
+                                        first_name = EXCLUDED.first_name,
+                                        last_name = EXCLUDED.last_name,
+                                        phone = EXCLUDED.phone,
+                                        date_of_birth = EXCLUDED.date_of_birth,
+                                        caste = EXCLUDED.caste,
+                                        annual_family_income_inr = EXCLUDED.annual_family_income_inr,
+                                        location_id = EXCLUDED.location_id
                                     RETURNING id;
                                 """),
                                 {
@@ -906,7 +872,7 @@ def main():
                                 "currently_pursuing_year": st.session_state.academic_year,
                             }
 
-                            # Insert into intermediate.student_registration
+                            # Insert into raw.student_registration
                             if not insert_student_registration(
                                 conn,
                                 student_id=student_id,
@@ -934,7 +900,7 @@ def main():
                                 if not matching_rows.empty:
                                     course_duration = int(matching_rows["course_duration"].iloc[0])
 
-                            # Insert into intermediate.student_education
+                            # Insert into raw.student_education
                             if not insert_student_education(
                                 conn,
                                 student_id=student_id,
@@ -956,7 +922,6 @@ def main():
                 except Exception as e:
                     # Generic catch-all for other failures (after the backup is already saved)
                     st.error(
-                        "We saved your basic information, but there was an error completing your registration.\n\n"
                         f"Error: {e}\n\n"
                         "Please contact support at +91 8983835993 and share a screenshot of this message."
                     )
