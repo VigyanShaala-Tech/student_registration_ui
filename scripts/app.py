@@ -731,6 +731,7 @@ def main():
             )            
 
         partner_options = [
+            "Avanti Fellows",
             "Christ University / Trivandrum Chapter",
             "Christ University / Bangalore Chapter",
             "Dr. Reddy’s Foundation – SASHAKTH",
