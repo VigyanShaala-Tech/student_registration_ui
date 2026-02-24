@@ -736,6 +736,7 @@ def main():
             "Christ University / Bangalore Chapter",
             "Dr. Reddy’s Foundation – SASHAKTH",
             "Eklavya Foundation",
+            "Foundation For Excellence (FFE)",
             "Udayan Care – Udayan Shalini Fellowship",
             "I’m applying on my own (not through any organization)"
         ]
