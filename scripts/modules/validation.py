@@ -1,7 +1,19 @@
+import os
 import re
+from pathlib import Path
+
 import streamlit as st
+from dotenv import load_dotenv
 from sqlalchemy import text
 from modules.db_connection import get_db_connection
+
+# Always load scripts/config.env (not dependent on Streamlit working directory)
+load_dotenv(Path(__file__).resolve().parent.parent / "config.env")
+
+
+def _is_duplicate_email_check_enabled():
+    value = os.getenv("CHECK_DUPLICATE_EMAIL", "false").strip().lower()
+    return value in ("true", "1", "yes", "on")
 
 
 
@@ -34,6 +46,7 @@ def get_email_suggestion(email):
     return None
 
 def validate_email(email):
+    email = (email or "").strip()
     pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
     if not re.match(pattern, email):
         return False, "Invalid email format"
@@ -58,6 +71,28 @@ def validate_email(email):
     valid_tlds = ('.com', '.org', '.net', '.edu', '.gov', '.io', '.in')
     if not domain.endswith(valid_tlds):
         return False, "Invalid email domain"
+
+    # Always allow test@gmail.com (skip duplicate check)
+    if email.lower() == "test@gmail.com":
+        return True, ""
+
+    if not _is_duplicate_email_check_enabled():
+        return True, ""
+
+    try:
+        engine = get_db_connection()
+        if not engine:
+            return False, "Could not connect to the database"
+
+        with engine.connect() as conn:
+            query = text('SELECT "email" FROM raw.student_details WHERE LOWER("email") = LOWER(:email)')
+            result = conn.execute(query, {"email": email})
+            row = result.fetchone()
+
+            if row:
+                return False, "Already registered!!! Log in, try another email, or contact support (+918983835993)"
+    except Exception as e:
+        return False, f"Database error while checking email: {str(e)}"
     
     return True, ""
 
