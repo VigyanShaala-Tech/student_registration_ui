@@ -237,9 +237,6 @@ def render_comfortable_languages_field():
         unsafe_allow_html=True,
     )
 
-    if "comfortable_languages_other" not in st.session_state:
-        st.session_state.comfortable_languages_other = ""
-
     selected = multiselect_from_state(
         "comfortable_languages",
         COMFORTABLE_LANGUAGES,
@@ -248,13 +245,12 @@ def render_comfortable_languages_field():
     other_text = ""
     if COMFORTABLE_LANGUAGES_OTHER in selected:
         render_form_field("Please specify other language(s)", required=True)
-        st.text_input(
+        other_text = st.text_input(
             "",
+            value=st.session_state.get("comfortable_languages_other", ""),
             placeholder="Enter language(s) not listed above",
-            key="comfortable_languages_other",
             label_visibility="collapsed",
-        )
-        other_text = st.session_state.comfortable_languages_other.strip()
+        ).strip()
 
     return selected, other_text
 

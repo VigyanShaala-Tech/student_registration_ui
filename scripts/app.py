@@ -106,6 +106,7 @@ def save_page3_state(
     professor_name,
     professor_phone,
     partner_organization,
+    comfortable_languages_other,
 ):
     st.session_state.whatsapp = whatsapp
     st.session_state.dob = dob
@@ -134,6 +135,7 @@ def save_page3_state(
     st.session_state.professor_name = professor_name
     st.session_state.professor_phone = professor_phone
     st.session_state.partner_organization = partner_organization
+    st.session_state.comfortable_languages_other = comfortable_languages_other
 
 
 # Main form
@@ -279,9 +281,7 @@ def main():
             # 1. Full Name
             render_form_field("Full Name")
             full_name = st.text_input("", value=st.session_state.full_name, placeholder="Enter your full name", label_visibility="collapsed")
-            # Auto-save to session state
-            st.session_state.full_name = full_name
-            
+
             # 2. Current Academic Year
             render_form_field("Current Academic Year")
             academic_year = st.selectbox(
@@ -358,8 +358,6 @@ def main():
                     placeholder="Enter your university name manually",
                     label_visibility="collapsed"
                 )
-                # Auto-save to session state
-                st.session_state.new_university_name = new_university_name
 
             # 5. College Name
             render_form_field("College Name")
@@ -396,8 +394,6 @@ def main():
                     placeholder="Enter your college name manually",
                     label_visibility="collapsed"
                 )
-                # Auto-save to session state
-                st.session_state.new_college_name = new_college_name
 
             # 6. College Location - Country
             render_form_field("College Country")
@@ -600,7 +596,6 @@ def main():
             is_valid, message = validate_phone(whatsapp)
             if not is_valid:
                 st.error(message)
-        st.session_state.whatsapp = whatsapp
 
         # 1.b. Date of Birth
         render_form_field("Date of Birth")
@@ -829,7 +824,6 @@ def main():
             help="Minimum 50 characters required",
             label_visibility="collapsed"
         )
-        st.session_state.motivation = motivation
         if motivation:
             is_valid, message = validate_character_count(motivation, 50)
             if not is_valid:
@@ -844,7 +838,6 @@ def main():
             help="Minimum 50 characters required",
             label_visibility="collapsed"
         )
-        st.session_state.problems = problems
         if problems:
             is_valid, message = validate_character_count(problems, 50)
             if not is_valid:
@@ -858,7 +851,6 @@ def main():
             placeholder="Enter full name of the professor",
             label_visibility="collapsed"
         )
-        st.session_state.professor_name = professor_name
 
         # 11. Professor's Phone (Optional)
         render_form_field("Professor's contact number.(Optional)", required=False)
@@ -872,9 +864,7 @@ def main():
         if professor_phone:
                 is_valid, message = validate_phone(professor_phone)
                 if not is_valid:
-                    st.error(message)    
-
-        st.session_state.professor_phone = professor_phone
+                    st.error(message)
 
         # 12. Partner Organization
         render_form_field(
@@ -932,6 +922,7 @@ def main():
                 professor_name,
                 professor_phone,
                 partner_organization,
+                comfortable_languages_other,
             )
             st.session_state.page = 2
             st.rerun()
@@ -1004,6 +995,7 @@ def main():
                     professor_name,
                     professor_phone,
                     partner_organization,
+                    comfortable_languages_other,
                 )
 
                 try:
