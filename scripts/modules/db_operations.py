@@ -134,9 +134,15 @@ def insert_student_education(conn, student_id, education_course_id, subject_id, 
             raise ValueError("course_duration cannot be None")
         if subject_id is not None and (not isinstance(subject_id, list) or not all(isinstance(id, int) for id in subject_id)):
             raise ValueError("subject_id must be a list of integers or None")
+        if interest_subject_id is not None and (
+            not isinstance(interest_subject_id, list)
+            or not all(isinstance(id, int) for id in interest_subject_id)
+        ):
+            raise ValueError("interest_subject_id must be a list of integers or None")
 
-        # Convert subject_id list to PostgreSQL array format
-        subject_id_array = f"{{{','.join(str(id) for id in subject_id)}}}" if subject_id and len(subject_id) > 0 else None
+        # Both columns are integer[] — pass Python lists so psycopg2 binds them correctly.
+        subject_id_value = subject_id if subject_id else None
+        interest_subject_id_value = interest_subject_id if interest_subject_id else None
 
         # Academic year mapping
         academic_year_map = {
@@ -185,8 +191,8 @@ def insert_student_education(conn, student_id, education_course_id, subject_id, 
         conn.execute(query, {
             "student_id": student_id,
             "education_course_id": education_course_id,
-            "subject_id": subject_id_array,
-            "interest_subject_id": interest_subject_id,
+            "subject_id": subject_id_value,
+            "interest_subject_id": interest_subject_id_value,
             "college_id": college_id,
             "university_id": university_id,
             "college_location_id": college_location_id,

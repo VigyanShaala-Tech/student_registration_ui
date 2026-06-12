@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import bindparam, create_engine, text
 import os
 from dotenv import load_dotenv
 
@@ -46,4 +46,23 @@ def fetch_data(_engine, query, column_name=None, params=None):
         return df
     except Exception as e:
         st.error(f"Error executing query: {str(e)}")
-        return []
+        return [] if column_name else pd.DataFrame()
+
+
+@st.cache_data
+def fetch_sub_fields_for_subject_areas(_engine, subject_areas):
+    """Fetch distinct sub-fields for one or more subject areas."""
+    if not subject_areas:
+        return pd.DataFrame()
+
+    try:
+        query = text("""
+            SELECT DISTINCT ON ("sub_field") "sub_field", "id"
+            FROM raw."subject_mapping"
+            WHERE "subject_area" IN :areas
+            ORDER BY "sub_field", "id"
+        """).bindparams(bindparam("areas", expanding=True))
+        return pd.read_sql(query, _engine, params={"areas": list(subject_areas)})
+    except Exception as e:
+        st.error(f"Error executing query: {str(e)}")
+        return pd.DataFrame()

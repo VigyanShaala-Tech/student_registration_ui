@@ -124,11 +124,134 @@ def validate_word_count(text, min_words):
         return False, f"Please enter at least {min_words} words (you entered {len(words)} words)"
     return True, "Valid word count"
 
+MENTOR_MATCH_OPTIONS = [
+    (
+        "Technical depth",
+        "Someone with hands-on expertise in my specific subject area who can guide me through the technical challenges of my project",
+    ),
+    (
+        "Research & Academia",
+        "Someone from a university or research background who can help me think rigorously and explore ideas deeply",
+    ),
+    (
+        "Industry & Practical Application",
+        "Someone working in the field who can connect my project to real-world problems and solutions",
+    ),
+    (
+        "Innovation & Frugal Design",
+        "Someone experienced in building low-cost, high-impact solutions in resource-constrained environments",
+    ),
+    (
+        "Entrepreneurship & Commercialization",
+        "Someone who can help me think about how my project could become a product or startup",
+    ),
+    (
+        "Interdisciplinary Thinking",
+        "Someone who can bring perspectives from outside my field to make my project stronger",
+    ),
+]
+
+MENTOR_MATCH_LABELS = [label for label, _ in MENTOR_MATCH_OPTIONS]
+MENTOR_MATCH_DESCRIPTIONS = {label: description for label, description in MENTOR_MATCH_OPTIONS}
+
+
 def render_form_field(label, required=True):
     """Render a consistent form field label"""
     if required:
         st.markdown(f"**{label}** <span style='color: red;'>*</span>", unsafe_allow_html=True)
     else:
         st.markdown(f"**{label}**", unsafe_allow_html=True)
+
+
+def selectbox_index(options, value):
+    """Index for selectbox(default from session_state) — None if value not in options."""
+    return options.index(value) if value in options else None
+
+
+def multiselect_from_state(state_key, options, *, max_selections=None, placeholder=""):
+    """Multiselect restored from session_state; save return value on Next/Submit only."""
+    if not options:
+        return []
+    kwargs = {
+        "options": options,
+        "default": st.session_state.get(state_key, []),
+        "placeholder": placeholder,
+        "label_visibility": "collapsed",
+    }
+    if max_selections is not None:
+        kwargs["max_selections"] = max_selections
+    return st.multiselect("", **kwargs)
+
+
+def render_mentor_match_preference_field():
+    """Mentor match type: multiselect labels; full text shown for each selection."""
+    st.markdown(
+        "**What type of mentor support are you looking for for your STEM Frugal project?** "
+        "<span style='color: red;'>*</span>",
+        unsafe_allow_html=True,
+    )
+
+    labels = MENTOR_MATCH_LABELS
+    selected = multiselect_from_state(
+        "mentor_match_preference",
+        labels,
+        placeholder="Search and select one or more options",
+    )
+    for choice in selected:
+        st.info(f"**{choice}** — {MENTOR_MATCH_DESCRIPTIONS[choice]}")
+
+    return selected
+
+
+COMFORTABLE_LANGUAGES = [
+    "Assamese",
+    "Bengali",
+    "Garhwali",
+    "Gujarati",
+    "Hindi",
+    "Kannada",
+    "Kashmiri",
+    "Konkani",
+    "Kumaoni",
+    "Maithili",
+    "Malayalam",
+    "Manipuri",
+    "Marathi",
+    "Odia",
+    "Punjabi",
+    "Sindhi",
+    "Tamil",
+    "Telugu",
+    "Urdu",
+    "Others",
+]
+
+COMFORTABLE_LANGUAGES_OTHER = "Others"
+
+
+def render_comfortable_languages_field():
+    """Languages other than English; multiselect with optional text when Others is chosen."""
+    st.markdown(
+        "**Other than English, which languages are you comfortable communicating in?** "
+        "<span style='color: red;'>*</span>",
+        unsafe_allow_html=True,
+    )
+
+    selected = multiselect_from_state(
+        "comfortable_languages",
+        COMFORTABLE_LANGUAGES,
+        placeholder="Search and select one or more languages",
+    )
+    other_text = ""
+    if COMFORTABLE_LANGUAGES_OTHER in selected:
+        render_form_field("Please specify other language(s)", required=True)
+        other_text = st.text_input(
+            "",
+            value=st.session_state.get("comfortable_languages_other", ""),
+            placeholder="Enter language(s) not listed above",
+            label_visibility="collapsed",
+        ).strip()
+
+    return selected, other_text
 
 
