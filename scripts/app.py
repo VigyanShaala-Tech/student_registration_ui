@@ -614,7 +614,7 @@ def main():
         st.markdown(
             "**Which subject area do you want to pursue in future?** "
             "<span style='color: red;'>*</span> "
-            "<small style='color: #555;'>(select up to 2 subject areas)</small>",
+            "<small style='color: #555;'>(select 1 or 2 subject areas)</small>",
             unsafe_allow_html=True,
         )
 
@@ -938,8 +938,8 @@ def main():
                 errors.append(f"WhatsApp number: {message}")
             if not dob:
                 errors.append("Please enter your date of birth")
-            if len(future_subject_areas) < 2:
-                errors.append("Please select exactly 2 subject areas you want to pursue in future")
+            if len(future_subject_areas) < 1:
+                errors.append("Please select at least one subject area you want to pursue in future")
             if not future_sub_field:
                 errors.append("Please select your 1st preference for sub-field / specialization")
             if not mentor_match_preference:
